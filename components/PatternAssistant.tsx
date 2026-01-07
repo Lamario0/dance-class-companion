@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { explainPattern } from '../services/geminiService';
-import { Sparkles, X, Loader2 } from 'lucide-react';
+import { BrainCircuit, X, Loader2, Wand2 } from 'lucide-react';
 
 interface PatternAssistantProps {
   pattern: string;
@@ -26,51 +27,62 @@ export const PatternAssistant: React.FC<PatternAssistantProps> = ({ pattern, cla
     <>
       <button 
         onClick={handleAsk}
-        className="ml-2 inline-flex items-center text-xs text-violet-400 hover:text-violet-300 font-medium transition-colors"
+        className="ml-2 inline-flex items-center justify-center w-7 h-7 rounded-lg bg-violet-500/10 text-violet-400 hover:bg-violet-500 hover:text-white transition-all duration-200 border border-violet-500/20 shadow-sm group/ai"
         title="Ask AI Instructor"
       >
-        <Sparkles className="w-3 h-3 mr-1" />
+        <BrainCircuit className="w-3.5 h-3.5 group-hover/ai:scale-110 transition-transform" />
         <span className="sr-only">Explain {pattern}</span>
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 relative animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-8 relative animate-in fade-in zoom-in duration-200 ring-1 ring-white/10">
             <button 
               onClick={() => setIsOpen(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300"
+              className="absolute top-6 right-6 text-slate-500 hover:text-slate-300 transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-6 h-6" />
             </button>
             
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-violet-900/30 text-violet-300 rounded-full">
-                <Sparkles className="w-5 h-5" />
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-violet-600/20 text-violet-400 rounded-2xl border border-violet-500/20">
+                <BrainCircuit className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-slate-100">AI Assistant</h3>
+              <div>
+                <h3 className="text-xl font-bold text-slate-100">AI Dance Guide</h3>
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold mt-0.5">Instant Insight</p>
+              </div>
             </div>
             
-            <p className="font-semibold text-slate-300 mb-2">
-              Explaining: <span className="text-violet-400">{pattern}</span>
-            </p>
+            <div className="mb-6">
+               <p className="text-sm text-slate-400 mb-1">Concept:</p>
+               <p className="text-lg font-bold text-violet-400 leading-tight">
+                 {pattern}
+               </p>
+            </div>
 
-            <div className="bg-slate-800 p-4 rounded-xl text-slate-300 text-sm leading-relaxed min-h-[100px] border border-slate-700/50">
+            <div className="bg-slate-950/50 p-6 rounded-2xl text-slate-200 text-sm leading-relaxed min-h-[120px] border border-slate-800/50 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-2 opacity-5 pointer-events-none">
+                <Wand2 className="w-20 h-20 rotate-12" />
+              </div>
               {loading ? (
-                <div className="flex items-center justify-center h-24">
-                  <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
-                  <span className="ml-2 text-slate-400">Consulting the knowledge base...</span>
+                <div className="flex flex-col items-center justify-center h-24 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+                  <span className="text-slate-500 font-medium italic">Consulting the instructor manual...</span>
                 </div>
               ) : (
-                explanation
+                <div className="animate-in fade-in slide-in-from-top-2 duration-500">
+                  {explanation}
+                </div>
               )}
             </div>
             
-            <div className="mt-4 flex justify-end">
+            <div className="mt-8 flex justify-end">
               <button 
                 onClick={() => setIsOpen(false)}
-                className="px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors border border-slate-700"
+                className="px-6 py-2.5 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-700 transition-all border border-slate-700 active:scale-95 shadow-lg"
               >
-                Close
+                Got it
               </button>
             </div>
           </div>
