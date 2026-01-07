@@ -1,0 +1,7 @@
+{
+  "name": "Dance Class Companion",
+  "description": "A comprehensive student portal for dance classes, featuring weekly pattern recaps, video tutorials, and curated music playlists powered by Google Sheets and Gemini AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
