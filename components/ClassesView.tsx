@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { DanceClass, VideoItem } from '../types';
 import { YouTubeEmbed } from './YouTubeEmbed';
 import { PatternAssistant } from './PatternAssistant';
-import { Calendar, GraduationCap, StickyNote, Video } from 'lucide-react';
+import { Calendar, BookOpen, PenTool, Video, ChevronRight } from 'lucide-react';
 
 interface ClassesViewProps {
   classes: DanceClass[];
@@ -14,71 +15,88 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ classes, videoOfMonth 
     <div className="space-y-12 pb-20">
       
       {/* Classes Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {classes.slice(0, 4).map((cls) => (
-          <div key={cls.id} className="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 overflow-hidden flex flex-col hover:border-slate-700 transition-colors group">
-            <div className="bg-slate-800 p-4 flex items-center justify-between group-hover:bg-slate-750 transition-colors border-b border-slate-700/50">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-violet-400" />
+          <div key={cls.id} className="bg-slate-900 rounded-[2.5rem] shadow-xl border border-slate-800/50 overflow-hidden flex flex-col hover:border-violet-500/30 transition-all duration-300 group hover:shadow-violet-900/10">
+            <div className="bg-slate-800/50 p-6 flex items-center justify-between group-hover:bg-slate-800 transition-colors border-b border-slate-700/30">
+              <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 bg-slate-700 rounded-lg">
+                  <Calendar className="w-5 h-5 text-violet-400" />
+                </div>
                 {cls.name}
               </h3>
             </div>
             
-            <div className="p-5 flex-1 flex flex-col gap-4">
+            <div className="p-7 flex-1 flex flex-col gap-6">
               {/* Content Section */}
               <div>
-                <div className="flex items-center gap-2 mb-2 text-violet-400 font-semibold text-sm uppercase tracking-wide">
-                  <GraduationCap className="w-5 h-5" />
-                  Content
+                <div className="flex items-center gap-2 mb-4 text-violet-400 font-bold text-xs uppercase tracking-[0.2em]">
+                  <BookOpen className="w-4 h-4" />
+                  Pattern Library
                 </div>
-                <ul className="space-y-2">
+                <div className="grid gap-2">
                   {cls.content.split(',').map((item, idx) => {
                     const cleanItem = item.trim();
                     if (!cleanItem) return null;
                     return (
-                      <li key={idx} className="flex items-center justify-between bg-slate-800/50 p-2 rounded-lg text-sm text-slate-300 border border-slate-700/50">
-                        <span>{cleanItem}</span>
+                      <div key={idx} className="flex items-center justify-between bg-slate-950/50 p-3 rounded-2xl text-sm text-slate-300 border border-slate-800/50 group/item hover:border-slate-700 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <ChevronRight className="w-3 h-3 text-slate-600 group-hover/item:text-violet-500 transition-colors" />
+                          <span className="font-medium">{cleanItem}</span>
+                        </div>
                         <PatternAssistant pattern={cleanItem} className={cls.name} />
-                      </li>
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               </div>
 
-              <hr className="border-slate-800" />
-
               {/* Notes Section */}
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2 text-sky-400 font-semibold text-sm uppercase tracking-wide">
-                  <StickyNote className="w-4 h-4" />
-                  Notes
+              <div className="flex-1 mt-auto">
+                <div className="flex items-center gap-2 mb-3 text-sky-400 font-bold text-xs uppercase tracking-[0.2em]">
+                  <PenTool className="w-4 h-4" />
+                  Instructor Notes
                 </div>
-                <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line bg-sky-900/20 p-3 rounded-lg border border-sky-800/30">
+                <div className="text-slate-300 text-sm leading-relaxed bg-sky-900/10 p-5 rounded-2xl border border-sky-800/20 relative italic">
+                   <div className="absolute top-2 right-4 text-sky-900/30 text-4xl font-serif">"</div>
                   {cls.notes}
-                </p>
+                </div>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Video of the Month Section (Moved to Bottom) */}
-      <section className="bg-slate-900 rounded-3xl shadow-sm border border-slate-800 overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-slate-800 flex items-center gap-3 bg-slate-800/50">
-            <div className="p-2 bg-violet-900/30 text-violet-300 rounded-lg">
-                <Video className="w-5 h-5" />
+      {/* Video of the Month Section */}
+      <section className="bg-slate-900 rounded-[3rem] shadow-2xl border border-slate-800 overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-violet-600/10 blur-[100px] -z-10"></div>
+        <div className="p-8 md:p-10 border-b border-slate-800 flex items-center justify-between bg-slate-800/20 backdrop-blur-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-violet-600 text-white rounded-2xl shadow-lg shadow-violet-900/20">
+                  <Video className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-slate-100 tracking-tight">VIDEO OF THE MONTH</h2>
+                <p className="text-slate-500 text-sm font-medium">Curated selection for your growth</p>
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-slate-100">Video of the Month</h2>
         </div>
-        <div className="p-6 md:p-8">
+        <div className="p-8 md:p-12">
           {videoOfMonth ? (
             <div className="max-w-4xl mx-auto">
-              <YouTubeEmbed url={videoOfMonth.url} className="w-full aspect-video rounded-2xl shadow-lg ring-1 ring-white/5" title={videoOfMonth.title} />
-              <h3 className="mt-4 text-lg font-semibold text-slate-200 text-center">{videoOfMonth.title}</h3>
+              <div className="relative group">
+                <div className="absolute -inset-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 rounded-[2.5rem] blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+                <YouTubeEmbed url={videoOfMonth.url} className="w-full aspect-video rounded-3xl shadow-2xl relative z-10" title={videoOfMonth.title} />
+              </div>
+              <div className="mt-8 flex flex-col items-center">
+                <span className="px-4 py-1 rounded-full bg-violet-500/10 text-violet-400 text-xs font-bold border border-violet-500/20 mb-2 tracking-widest uppercase">Now Featuring</span>
+                <h3 className="text-2xl font-bold text-white text-center">{videoOfMonth.title}</h3>
+              </div>
             </div>
           ) : (
-            <div className="text-center p-12 text-slate-500">
-              No video selected for this month.
+            <div className="text-center py-20 bg-slate-950/30 rounded-3xl border border-dashed border-slate-800">
+              <Video className="w-12 h-12 mx-auto mb-4 text-slate-800" />
+              <p className="text-slate-500 font-medium">The stage is set... no video featured just yet.</p>
             </div>
           )}
         </div>
