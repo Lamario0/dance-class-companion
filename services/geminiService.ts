@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 // Initialize the client strictly using process.env.API_KEY as per guidelines
@@ -17,7 +18,7 @@ export const explainPattern = async (patternName: string, className: string): Pr
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         thinkingConfig: { thinkingBudget: 0 } // Low latency preferred for UI tooltips
@@ -45,7 +46,7 @@ export const parseVoiceSearch = async (audioBase64: string, mimeType: string): P
     const prompt = "Listen to this audio. The user is searching for a song, artist, or genre in a dance music library. Extract the text search query. Return ONLY the search terms as text. If no search term is detected, return empty string.";
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
       contents: {
         parts: [
           {
