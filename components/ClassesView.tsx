@@ -32,7 +32,7 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ classes, videoOfMonth 
               <div>
                 <div className="flex items-center gap-2 mb-4 text-violet-400 font-bold text-xs uppercase tracking-[0.2em]">
                   <BookOpen className="w-4 h-4" />
-                  Pattern Library
+                  Latest Pattern
                 </div>
                 <div className="grid gap-2">
                   {cls.content.split(',').map((item, idx) => {
