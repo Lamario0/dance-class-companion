@@ -1,3 +1,4 @@
+
 import { AppData, DanceClass, VideoItem, SongItem, Announcement } from '../types';
 import Papa from 'papaparse';
 
@@ -5,8 +6,9 @@ import Papa from 'papaparse';
 const SPREADSHEET_ID = '1VuTfGDldybCC8Lv0FSQG8acMSQ681X93NgUVAXg89Ls';
 const SHEET_NAME = 'webapp data';
 
-// Using the export endpoint without 'tq' to get raw data. 
-// Note: gviz often skips empty rows, so we cannot rely on fixed row indices (e.g. Row 33 != Index 32).
+/**
+ * The gviz endpoint is reliable for fetching ranges. 
+ */
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&range=A1:E100&headers=0&t=${Date.now()}`;
 
 // Default data used as fallback if fetch fails
@@ -32,7 +34,7 @@ export const fetchSheetData = async (): Promise<AppData> => {
     return new Promise((resolve) => {
       Papa.parse(csvText, {
         header: false, 
-        skipEmptyLines: false,
+        skipEmptyLines: false, // Keep empty lines to maintain strict row index alignment
         complete: (results) => {
           const rows = results.data as string[][];
           
@@ -50,37 +52,35 @@ export const fetchSheetData = async (): Promise<AppData> => {
             return text;
           };
 
-          // Helper: Find row index by header content
-          const findRowByHeader = (search: string, startFrom = 0): number => {
-            for (let i = startFrom; i < rows.length; i++) {
-              const cellA = (rows[i][0] || '').toLowerCase();
-              const cellB = (rows[i][1] || '').toLowerCase();
-              if (cellA.includes(search.toLowerCase()) || cellB.includes(search.toLowerCase())) {
-                return i;
-              }
-            }
-            return -1;
-          };
-
-          // --- 1. Classes ---
-          // Indices 1-4 (Rows 2-5)
+          // --- 1. Classes (STRICTLY Rows 2-5 / Indices 1-4) ---
           const classes: DanceClass[] = [];
           for (let i = 1; i <= 4; i++) {
-            const name = getCell(i, 0);
-            if (name) {
+            const name = getCell(i, 0); // Column A
+            const content = getCell(i, 1); // Column B
+            const notes = getCell(i, 2); // Column C
+
+            // Safeguards to detect if music data has "slid up" into the class indices (1-4)
+            const lowerName = name.toLowerCase();
+            const lowerNotes = notes.toLowerCase();
+            
+            const isMusicHeader = lowerName.includes('music') || lowerName.includes('song') || lowerName.includes('playlist');
+            const isMusicUrl = lowerNotes.startsWith('http') || lowerNotes.includes('spotify') || lowerNotes.includes('youtube');
+            const isEmpty = !name || lowerName === 'class name' || lowerName === 'name' || name === '-';
+
+            // Only add the class if it's not empty and definitely not music data
+            if (!isEmpty && !isMusicHeader && !isMusicUrl) {
               classes.push({
                 id: `class-${i}`,
                 name: name,
-                content: getCell(i, 1),
-                notes: getCell(i, 2)
+                content: content,
+                notes: notes
               });
             }
           }
 
           const songs: SongItem[] = [];
 
-          // --- 2. New Music ---
-          // Indices 7-11 (Rows 8-12)
+          // --- 2. New Music (Rows 8-12 / Indices 7-11) ---
           for (let i = 7; i <= 11; i++) {
             const title = getCell(i, 0);
             if (title && !title.toLowerCase().includes('music')) { 
@@ -94,8 +94,7 @@ export const fetchSheetData = async (): Promise<AppData> => {
             }
           }
 
-          // --- 3. Blues Music ---
-          // Indices 14-18 (Rows 15-19)
+          // --- 3. Blues Music (Rows 15-19 / Indices 14-18) ---
           for (let i = 14; i <= 18; i++) {
             const title = getCell(i, 0);
             if (title && !title.toLowerCase().includes('music')) {
@@ -109,8 +108,7 @@ export const fetchSheetData = async (): Promise<AppData> => {
             }
           }
 
-          // --- 4. Practice Songs ---
-          // Indices 21-25 (Rows 22-26)
+          // --- 4. Practice Songs (Rows 22-26 / Indices 21-25) ---
           for (let i = 21; i <= 25; i++) {
             const title = getCell(i, 0);
             if (title && !title.toLowerCase().includes('songs')) {
@@ -127,95 +125,50 @@ export const fetchSheetData = async (): Promise<AppData> => {
           const videos: VideoItem[] = [];
 
           // --- 5. Video of the Month ---
-          let vomIndex = findRowByHeader('video of the month', 20);
-          
-          if (vomIndex === -1) {
-             vomIndex = 28; // Fallback index if header not found
-          } else {
-             vomIndex = vomIndex + 1;
+          let vomIndex = -1;
+          for (let i = 25; i < 45; i++) {
+            if (getCell(i, 0).toLowerCase().includes('video of the month')) {
+              vomIndex = i + 1; 
+              break;
+            }
           }
-
-          const rawVomCell = getCell(vomIndex, 0);
-          const cleanVomUrl = extractUrl(rawVomCell);
           
-          if (cleanVomUrl && (cleanVomUrl.startsWith('http') || /^[a-zA-Z0-9_-]{11}$/.test(cleanVomUrl))) {
-            videos.push({
-              id: 'vom',
-              title: 'Video of the Month',
-              url: cleanVomUrl,
-              category: 'month'
-            });
+          if (vomIndex !== -1 && vomIndex < rows.length) {
+            const cleanVomUrl = extractUrl(getCell(vomIndex, 0));
+            if (cleanVomUrl) {
+              videos.push({
+                id: 'vom',
+                title: 'Video of the Month',
+                url: cleanVomUrl,
+                category: 'month'
+              });
+            }
           }
 
           // --- 6. Announcements ---
-          // Dynamic Search Logic:
-          // Because empty rows are stripped, we cannot rely on index 32 being Row 33.
-          // We search for a "News" or "Announcements" header, or the "Date/Text" columns.
-          
           const announcements: Announcement[] = [];
-          let newsStartIndex = -1;
-
-          // Start searching after the songs (approx index 25)
+          
+          let newsStart = -1;
           for (let i = 25; i < rows.length; i++) {
-            const cellA = (rows[i][0] || '').toLowerCase().trim();
-            const cellB = (rows[i][1] || '').toLowerCase().trim();
-
-            // Check for Section Title
-            if (cellA === 'news' || cellA === 'announcements' || cellA.includes('updates')) {
-               // Found section title. Data usually starts 1 or 2 rows down.
-               // Check if next row is "Date" header
-               const nextA = (rows[i+1]?.[0] || '').toLowerCase();
-               if (nextA === 'date') {
-                 newsStartIndex = i + 2; // Title -> Header -> Data
-               } else {
-                 newsStartIndex = i + 1; // Title -> Data
-               }
-               break;
-            }
-
-            // Check for Column Headers directly (Date / Text)
-            if (cellA === 'date' && (cellB === 'text' || cellB === 'announcement')) {
-                newsStartIndex = i + 1; // Header -> Data
-                break;
+            const cellA = getCell(i, 0).toLowerCase();
+            if (cellA === 'news' || cellA === 'announcements' || (cellA === 'date' && getCell(i, 1).toLowerCase().includes('text'))) {
+              newsStart = (cellA === 'date') ? i + 1 : i + 2;
+              break;
             }
           }
 
-          // If dynamic search failed, try a best-guess based on VOM position + offset
-          // But purely relying on the loop below is safer if we just iterate and validate.
-          
-          if (newsStartIndex !== -1) {
-             // We found a start point. Read until we hit empty or end of likely range.
-             for (let i = newsStartIndex; i < newsStartIndex + 15 && i < rows.length; i++) {
-                const date = getCell(i, 0);
-                const text = getCell(i, 1);
+          const finalNewsStart = newsStart !== -1 ? newsStart : 32;
 
-                // Stop if we hit a new section (unlikely in this specific sheet structure but good safety)
-                if (date.toLowerCase().includes('class')) break;
-
-                if (text) {
-                  announcements.push({
-                    id: `ann-${i}`,
-                    date: date,
-                    text: text
-                  });
-                }
-             }
-          } else {
-             // Fallback: If we couldn't find a header, we scan the last 15 rows of the dataset 
-             // assuming News is at the bottom.
-             const startScan = Math.max(0, rows.length - 15);
-             for (let i = startScan; i < rows.length; i++) {
-                 const date = getCell(i, 0);
-                 const text = getCell(i, 1);
-                 // Heuristic: Valid news item has text and maybe a date
-                 if (text && !text.toLowerCase().includes('text') && !date.toLowerCase().includes('date')) {
-                      announcements.push({
-                        id: `ann-fb-${i}`,
-                        date: date,
-                        text: text
-                      });
-                 }
-             }
+          for (let i = finalNewsStart; i < finalNewsStart + 11 && i < rows.length; i++) {
+            const date = getCell(i, 0);
+            const text = getCell(i, 1);
+            if (text && text.toLowerCase() !== 'text') {
+              announcements.push({
+                id: `ann-${i}`,
+                date: date,
+                text: text
+              });
+            }
           }
 
           resolve({ classes, videos, songs, announcements });
