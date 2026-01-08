@@ -87,7 +87,6 @@ export const CalculatorView: React.FC = () => {
     if (window.confirm("Are you sure you want to clear all data and counters for this session? This cannot be undone.")) {
       const today = new Date().toISOString().split('T')[0];
       
-      // 1. Reset all local state variables
       setLessonCount(0);
       setDanceOnlyCount(0);
       setTotalManualAdjust(0);
@@ -100,7 +99,6 @@ export const CalculatorView: React.FC = () => {
       setPriceLesson(25);
       setPriceDance(15);
       
-      // 2. Immediate cloud sync to reset persistent storage
       syncCurrentSessionState({
         lessonCount: 0,
         danceOnlyCount: 0,
@@ -155,7 +153,6 @@ export const CalculatorView: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-row items-center justify-between mb-8 gap-2">
-        {/* Top Header Section */}
         <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
           <div className="flex items-center gap-1 sm:gap-2">
             <div className="p-1.5 bg-violet-600 rounded-lg shrink-0">
@@ -163,7 +160,6 @@ export const CalculatorView: React.FC = () => {
             </div>
             <h2 className="text-xs sm:text-xl font-black text-white whitespace-nowrap">Admin Tools</h2>
           </div>
-          {/* Date Picker - smaller on mobile */}
           <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl p-1.5 pl-3 pr-2 shadow-sm shrink-0">
             <CalendarIcon className="w-3.5 h-3.5 text-violet-400 shrink-0" />
             <input 
@@ -175,7 +171,6 @@ export const CalculatorView: React.FC = () => {
           </div>
         </div>
         
-        {/* Right aligned Clear button */}
         <button 
           onClick={handleClearAll}
           className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all text-[10px] sm:text-sm font-black shadow-lg flex-shrink-0"
@@ -186,8 +181,6 @@ export const CalculatorView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
-        
-        {/* Attendance Counters */}
         <div className="space-y-6">
           <section className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 border border-slate-800 shadow-xl">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-8 flex items-center gap-2">
@@ -222,12 +215,11 @@ export const CalculatorView: React.FC = () => {
               <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 <button onClick={() => setTotalManualAdjust(v => v - 1)} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-slate-400"><Minus className="w-4 h-4"/></button>
                 <span className="text-[9px] text-slate-500 font-black uppercase px-1">Adjust</span>
-                <button onClick={() => setTotalManualAdjust(v => + v + 1)} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-slate-400"><Plus className="w-4 h-4"/></button>
+                <button onClick={() => setTotalManualAdjust(v => v + 1)} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-slate-400"><Plus className="w-4 h-4"/></button>
               </div>
             </div>
           </section>
 
-          {/* Comped Section */}
           <section className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 border border-slate-800 shadow-xl">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-8 flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-emerald-400" />
@@ -266,7 +258,6 @@ export const CalculatorView: React.FC = () => {
           </section>
         </div>
 
-        {/* Revenue & Splits */}
         <div className="space-y-6">
           <section className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 border border-slate-800 shadow-xl relative overflow-hidden h-full">
              <div className="absolute -top-10 -right-10 opacity-[0.03] pointer-events-none">
@@ -279,7 +270,6 @@ export const CalculatorView: React.FC = () => {
             </h3>
 
             <div className="space-y-8">
-              {/* Total Revenue Display */}
               <div className="bg-slate-950 p-6 sm:p-8 rounded-[2rem] border border-slate-800 relative z-10">
                 <div className="flex justify-between items-start mb-8 sm:mb-10">
                   <div>
@@ -310,7 +300,6 @@ export const CalculatorView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Split Calculator */}
               <div>
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Instructor Split (↑)</label>
                 <div className="grid grid-cols-4 gap-2">
