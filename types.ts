@@ -52,6 +52,8 @@ export interface AttendanceRecord {
   lessonAndDance: number;
   danceOnly: number;
   totalComped: number;
+  totalRevenue: number;
+  perPersonSplit: number;
 }
 
 export interface CompedRecord {
