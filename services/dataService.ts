@@ -1,11 +1,11 @@
 
 import { AppData, DanceClass, VideoItem, SongItem, Announcement } from '../types';
-import Papa from 'papaparse';
+import { parse } from 'papaparse';
 
 const SPREADSHEET_ID = '1VuTfGDldybCC8Lv0FSQG8acMSQ681X93NgUVAXg89Ls';
 const SHEET_NAME = 'webapp data';
 
-// Range A1:G150 covers Column F (Titles) and Column G (URLs)
+// Expanded range to A1:G150 to capture Column G for tutorial URLs
 const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&range=A1:G150&headers=0&t=${Date.now()}`;
 
 const DEFAULT_DATA: AppData = {
@@ -22,32 +22,20 @@ export const fetchSheetData = async (): Promise<AppData> => {
     const csvText = await response.text();
 
     return new Promise((resolve) => {
-      Papa.parse(csvText, {
+      parse(csvText, {
         header: false, 
         skipEmptyLines: false,
         complete: (results) => {
           const rows = results.data as string[][];
-          
-          const getCell = (r: number, c: number) => {
-            if (!rows[r]) return '';
-            return rows[r][c] ? String(rows[r][c]).trim() : '';
-          };
+          const getCell = (r: number, c: number) => rows[r] && rows[r][c] ? rows[r][c].trim() : '';
           
           const extractUrl = (text: string): string => {
             if (!text) return '';
-            // Match any URL-like string
-            const match = text.match(/https?:\/\/[^\s"']+/i);
-            if (match) {
-              return match[0].replace(/[,.)\]}]+$/, '');
-            }
-            // Fallback for just raw YouTube IDs if provided
-            if (/^[a-zA-Z0-9_-]{11}$/.test(text.trim())) {
-              return text.trim();
-            }
-            return '';
+            const match = text.match(/https?:\/\/[^\s"']+/);
+            return match ? match[0].replace(/[,.)\]}]+$/, '') : (text.startsWith('http') ? text : '');
           };
 
-          // --- 1. Classes (Rows 2-5 / Indices 1-4) ---
+          // --- 1. Classes (Rows 2-5) ---
           const classes: DanceClass[] = [];
           for (let i = 1; i <= 4; i++) {
             const name = getCell(i, 0);
@@ -61,7 +49,7 @@ export const fetchSheetData = async (): Promise<AppData> => {
             }
           }
 
-          // --- 2. Music Sections (Fixed Ranges) ---
+          // --- 2. Music Sections ---
           const songs: SongItem[] = [];
           const parseMusic = (start: number, end: number, cat: 'new' | 'blues' | 'practice') => {
             for (let i = start; i <= end; i++) {
@@ -77,40 +65,53 @@ export const fetchSheetData = async (): Promise<AppData> => {
               }
             }
           };
-          parseMusic(7, 11, 'new');    // Rows 8-12
-          parseMusic(14, 18, 'blues'); // Rows 15-19
-          parseMusic(21, 25, 'practice'); // Rows 22-26
+          parseMusic(7, 11, 'new');
+          parseMusic(14, 18, 'blues');
+          parseMusic(21, 25, 'practice');
 
           const videos: VideoItem[] = [];
 
-          // --- 3. Video of the Month (Strictly Row 29 / Column A) ---
-          // Index 28 is Row 29. Column A is Index 0.
-          const vomRaw = getCell(28, 0);
-          const vomUrl = extractUrl(vomRaw);
+          // --- 3. Video of the Month (Strictly Row 29 / Index 28) ---
+          // Looking at Column A, Row 29
+          let vomUrl = extractUrl(getCell(28, 0)); 
+          
+          // If Row 29 is empty, look for the label "Video of the Month" nearby
+          if (!vomUrl) {
+            for (let i = 25; i < 40; i++) {
+              const label = getCell(i, 0).toLowerCase();
+              if (label.includes('video of the month')) {
+                // Check if URL is in current cell or next cell
+                vomUrl = extractUrl(getCell(i, 0)) || extractUrl(getCell(i + 1, 0));
+                break;
+              }
+            }
+          }
+
           if (vomUrl) {
             videos.push({ id: 'vom', title: 'Video of the Month', url: vomUrl, category: 'month' });
           }
 
           // --- 4. Tutorials (Column F for Titles, Column G for URLs) ---
-          // A. Playlist from F1 (Index 0, Column Index 5)
+          // A. Playlist from F1 (Index 0, 5) if it exists
           const playlistUrl = extractUrl(getCell(0, 5));
           if (playlistUrl) {
             videos.push({ id: 'tut-playlist', title: 'Master Tutorials Playlist', url: playlistUrl, category: 'tutorial' });
           }
 
           // B. Individual Tutorials starting at Row 2 (Index 1)
-          // Column F = Index 5 (Title), Column G = Index 6 (URL)
+          // Column F (Index 5) is Title, Column G (Index 6) is URL
           for (let i = 1; i < 100; i++) {
-            const title = getCell(i, 5); 
-            const url = extractUrl(getCell(i, 6)); 
+            const title = getCell(i, 5); // Column F
+            const url = extractUrl(getCell(i, 6)); // Column G
             
             if (title && url) {
+              // Ensure we don't duplicate the playlist if listed twice
               if (url !== playlistUrl) {
                 videos.push({ id: `tut-list-${i}`, title, url, category: 'tutorial' });
               }
-            } else if (i > 5 && !title && !url) {
-              // Stop if we find an empty row after the initial possible header
-              break; 
+            } else if (i > 10 && !title && !url) {
+              // Stop after a gap if we're reasonably far down
+              break;
             }
           }
 
@@ -136,13 +137,13 @@ export const fetchSheetData = async (): Promise<AppData> => {
           resolve({ classes, videos, songs, announcements });
         },
         error: (err) => {
-          console.error("PapaParse error:", err);
+          console.error("CSV Parse error:", err);
           resolve(DEFAULT_DATA);
         }
       });
     });
   } catch (error) {
-    console.error("Data Service Fetch error:", error);
+    console.error("Fetch data error:", error);
     return DEFAULT_DATA;
   }
 };
