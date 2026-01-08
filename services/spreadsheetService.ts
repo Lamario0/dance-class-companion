@@ -1,40 +1,58 @@
 
 import { AttendanceRecord, CompedRecord } from '../types';
 
-const SPREADSHEET_ID = '1gBsurxruMeUvbG_Wncpl9VTHJkzbwfSbTWC_KVldKq0';
-
 /**
- * Commits the final attendance and revenue summary to the main tracking tab.
+ * IMPORTANT: Replace this URL with your deployed Google Apps Script Web App URL.
  */
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/REPLACE_WITH_YOUR_ID/exec';
+
+const callScript = async (payload: any) => {
+  if (GOOGLE_SCRIPT_URL.includes('REPLACE_WITH_YOUR_ID')) {
+    console.warn("Spreadsheet connection not configured. Please set GOOGLE_SCRIPT_URL in spreadsheetService.ts");
+    return { error: 'Not configured' };
+  }
+
+  try {
+    const response = await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors', // Apps Script requires no-cors for simple POST triggers
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    // With no-cors, we can't read the response, but it sends successfully
+    return { success: true };
+  } catch (error) {
+    console.error("Spreadsheet Service Error:", error);
+    return { error };
+  }
+};
+
 export const commitAttendance = async (record: AttendanceRecord): Promise<boolean> => {
-  console.log(`Committing Attendance to Spreadsheet ${SPREADSHEET_ID}:`, record);
-  // Implementation note: This would target the 'Daily Attendance' tab
-  return new Promise((resolve) => setTimeout(() => resolve(true), 1000));
+  // Writes to "Party Info" tab in Apps Script
+  const result = await callScript({ action: 'commitAttendance', ...record });
+  return !result.error;
 };
 
-/**
- * Commits an individual comped entry (name/notes) to the comped tracking tab.
- */
 export const commitCompedEntry = async (record: CompedRecord): Promise<boolean> => {
-  console.log(`Committing Comped Entry to Spreadsheet ${SPREADSHEET_ID}:`, record);
-  // Implementation note: This would target the 'Comped List' tab
-  return new Promise((resolve) => setTimeout(() => resolve(true), 800));
+  // Writes to "Comped" tab in Apps Script
+  const result = await callScript({ action: 'commitComped', ...record });
+  return !result.error;
 };
 
-/**
- * Fetches the "current" active session data from the spreadsheet.
- * This ensures that if a user logs in on a different device, they see the same counters.
- */
 export const fetchCurrentSessionState = async (): Promise<any | null> => {
-  console.log(`Fetching active session state from ${SPREADSHEET_ID}...`);
-  // This simulates checking the spreadsheet for the latest "open" session values.
-  // In a real app, you'd fetch the last row of a 'Current State' tab.
-  return null; // Return null to start fresh or the data object to resume
+  if (GOOGLE_SCRIPT_URL.includes('REPLACE_WITH_YOUR_ID')) return null;
+  
+  try {
+    const response = await fetch(GOOGLE_SCRIPT_URL);
+    const data = await response.json();
+    return data.state;
+  } catch (error) {
+    console.error("Failed to fetch state:", error);
+    return null;
+  }
 };
 
-/**
- * Periodically saves the "dirty" state to the spreadsheet so other devices can sync.
- */
 export const syncCurrentSessionState = async (state: any): Promise<void> => {
-  console.log(`Syncing current session state to cloud:`, state);
+  // Writes to "Session State" tab to allow multi-device syncing
+  await callScript({ action: 'syncState', state });
 };
