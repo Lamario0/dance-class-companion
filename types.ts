@@ -1,3 +1,4 @@
+
 export interface DanceClass {
   id: string;
   name: string;
@@ -37,9 +38,24 @@ export enum Tab {
   CLASSES = 'CLASSES',
   MEDIA = 'MEDIA',
   ANNOUNCEMENTS = 'ANNOUNCEMENTS',
-  SETTINGS = 'SETTINGS'
+  SETTINGS = 'SETTINGS',
+  CALCULATOR = 'CALCULATOR'
 }
 
 export interface AIResponse {
   explanation: string;
+}
+
+export interface AttendanceRecord {
+  date: string;
+  totalInAttendance: number;
+  lessonAndDance: number;
+  danceOnly: number;
+  totalComped: number;
+}
+
+export interface CompedRecord {
+  date: string;
+  name: string;
+  notes: string;
 }
