@@ -8,8 +8,9 @@ const SHEET_NAME = 'webapp data';
 
 /**
  * The gviz endpoint is reliable for fetching ranges. 
+ * Updated range to A1:F150 to include the playlist column.
  */
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&range=A1:E100&headers=0&t=${Date.now()}`;
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&range=A1:F150&headers=0&t=${Date.now()}`;
 
 // Default data used as fallback if fetch fails
 const DEFAULT_DATA: AppData = {
@@ -45,6 +46,7 @@ export const fetchSheetData = async (): Promise<AppData> => {
 
           // Helper: Extract first URL from text if present
           const extractUrl = (text: string): string => {
+            if (!text) return '';
             const match = text.match(/https?:\/\/[^\s"']+/);
             if (match) {
               return match[0].replace(/[,.)\]}]+$/, '');
@@ -59,7 +61,6 @@ export const fetchSheetData = async (): Promise<AppData> => {
             const content = getCell(i, 1); // Column B
             const notes = getCell(i, 2); // Column C
 
-            // Safeguards to detect if music data has "slid up" into the class indices (1-4)
             const lowerName = name.toLowerCase();
             const lowerNotes = notes.toLowerCase();
             
@@ -67,7 +68,6 @@ export const fetchSheetData = async (): Promise<AppData> => {
             const isMusicUrl = lowerNotes.startsWith('http') || lowerNotes.includes('spotify') || lowerNotes.includes('youtube');
             const isEmpty = !name || lowerName === 'class name' || lowerName === 'name' || name === '-';
 
-            // Only add the class if it's not empty and definitely not music data
             if (!isEmpty && !isMusicHeader && !isMusicUrl) {
               classes.push({
                 id: `class-${i}`,
@@ -126,7 +126,7 @@ export const fetchSheetData = async (): Promise<AppData> => {
 
           // --- 5. Video of the Month ---
           let vomIndex = -1;
-          for (let i = 25; i < 45; i++) {
+          for (let i = 25; i < 60; i++) {
             if (getCell(i, 0).toLowerCase().includes('video of the month')) {
               vomIndex = i + 1; 
               break;
@@ -145,7 +145,45 @@ export const fetchSheetData = async (): Promise<AppData> => {
             }
           }
 
-          // --- 6. Announcements ---
+          // --- 6. Tutorial Playlist (Row 1, Column F) ---
+          const playlistUrl = extractUrl(getCell(0, 5)); // Row 1 (Index 0), Col F (Index 5)
+          if (playlistUrl) {
+            videos.push({
+              id: 'tut-playlist',
+              title: 'Class Tutorials Playlist',
+              url: playlistUrl,
+              category: 'tutorial'
+            });
+          }
+
+          // --- 6b. Legacy Tutorials (Optional Fallback) ---
+          let tutsHeaderIndex = -1;
+          for (let i = 25; i < rows.length; i++) {
+            if (getCell(i, 0).toLowerCase().includes('tutorials')) {
+              tutsHeaderIndex = i + 1;
+              break;
+            }
+          }
+
+          if (tutsHeaderIndex !== -1) {
+            for (let i = tutsHeaderIndex; i < tutsHeaderIndex + 10 && i < rows.length; i++) {
+              const title = getCell(i, 0);
+              const url = extractUrl(getCell(i, 1));
+              if (title && url && !title.toLowerCase().includes('news')) {
+                // Avoid duplicating if it's the same URL as the playlist
+                if (url !== playlistUrl) {
+                  videos.push({
+                    id: `tut-${i}`,
+                    title: title,
+                    url: url,
+                    category: 'tutorial'
+                  });
+                }
+              }
+            }
+          }
+
+          // --- 7. Announcements ---
           const announcements: Announcement[] = [];
           
           let newsStart = -1;

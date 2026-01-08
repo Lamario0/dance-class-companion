@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useRef } from 'react';
+
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { VideoItem, SongItem } from '../types';
 import { YouTubeEmbed } from './YouTubeEmbed';
-import { Play, Music2, Headphones, Flame, Disc, Search, Mic, X, Loader2 } from 'lucide-react';
+import { Play, Music2, Headphones, Flame, Disc, Search, Mic, X, Loader2, ListMusic } from 'lucide-react';
 import { parseVoiceSearch } from '../services/geminiService';
 
 interface MediaViewProps {
@@ -20,7 +21,18 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
 
   // Derived state for tutorials
   const tutorials = useMemo(() => videos.filter(v => v.category === 'tutorial'), [videos]);
-  const [selectedVideoId, setSelectedVideoId] = useState<string>(tutorials[0]?.id || '');
+  
+  // Default to the playlist if it exists
+  const [selectedVideoId, setSelectedVideoId] = useState<string>('');
+
+  useEffect(() => {
+    if (tutorials.length > 0 && !selectedVideoId) {
+      // Prioritize the playlist URL if found
+      const playlist = tutorials.find(t => t.id === 'tut-playlist');
+      setSelectedVideoId(playlist ? playlist.id : tutorials[0].id);
+    }
+  }, [tutorials, selectedVideoId]);
+
   const selectedVideo = tutorials.find(v => v.id === selectedVideoId);
 
   // Derived state for songs
@@ -92,6 +104,8 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
       setIsProcessing(false);
     }
   };
+
+  const isPlaylist = selectedVideo?.id === 'tut-playlist' || selectedVideo?.url.includes('list=');
 
   return (
     <div className="space-y-8 pb-20">
@@ -198,36 +212,44 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
         </section>
       )}
 
-      {/* Default Content (Tutorials & Categories) - Only show if not searching or if user wants both (typically simpler to show all below) */}
+      {/* Default Content (Tutorials & Categories) */}
       <div className={searchQuery ? 'opacity-50 transition-opacity' : ''}>
         {/* Tutorials Section */}
         <section className="bg-slate-900 rounded-3xl shadow-sm border border-slate-800 overflow-hidden mb-8">
           <div className="p-6 border-b border-slate-800">
             <h2 className="text-2xl font-bold text-slate-100 mb-4 flex items-center gap-2">
               <div className="p-2 bg-violet-900/30 text-violet-300 rounded-lg">
-                <Play className="w-5 h-5 fill-current" />
+                {isPlaylist ? <ListMusic className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
               </div>
-              Video Tutorials
+              {isPlaylist ? "Class Tutorial Playlist" : "Video Tutorials"}
             </h2>
             
-            <div className="relative">
-              <select 
-                className="w-full appearance-none bg-slate-800 border border-slate-700 text-slate-200 py-3 px-4 pr-8 rounded-xl leading-tight focus:outline-none focus:bg-slate-700 focus:border-violet-500 transition-colors"
-                value={selectedVideoId}
-                onChange={(e) => setSelectedVideoId(e.target.value)}
-              >
-                {tutorials.length === 0 && <option>No tutorials available</option>}
-                {tutorials.map(v => (
-                  <option key={v.id} value={v.id}>{v.title}</option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+            {tutorials.length > 1 ? (
+              <div className="relative">
+                <select 
+                  className="w-full appearance-none bg-slate-800 border border-slate-700 text-slate-200 py-3 px-4 pr-8 rounded-xl leading-tight focus:outline-none focus:bg-slate-700 focus:border-violet-500 transition-colors"
+                  value={selectedVideoId}
+                  onChange={(e) => setSelectedVideoId(e.target.value)}
+                >
+                  {tutorials.map(v => (
+                    <option key={v.id} value={v.id}>{v.title}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                </div>
               </div>
-            </div>
+            ) : tutorials.length === 1 ? (
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-xl text-slate-400 text-sm font-medium border border-slate-700">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                {tutorials[0].title}
+              </div>
+            ) : (
+              <div className="p-4 text-center text-slate-500 italic">No tutorials configured in Google Sheets yet.</div>
+            )}
           </div>
 
-          <div className="p-6 bg-black flex justify-center border-t border-slate-800">
+          <div className="p-6 bg-black flex justify-center border-t border-slate-800 min-h-[300px]">
             {selectedVideo ? (
               <YouTubeEmbed url={selectedVideo.url} title={selectedVideo.title} className="w-full max-w-3xl aspect-video rounded-xl shadow-2xl ring-1 ring-white/10" />
             ) : (
