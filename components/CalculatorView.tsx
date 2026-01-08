@@ -157,7 +157,9 @@ export const CalculatorView: React.FC = () => {
       totalInAttendance,
       lessonAndDance: lessonCount,
       danceOnly: danceOnlyCount,
-      totalComped: totalCompedCount
+      totalComped: totalCompedCount,
+      totalRevenue: totalRevenue,
+      perPersonSplit: perPersonSplit
     };
 
     const success = await commitAttendance(record);
