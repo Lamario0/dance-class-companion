@@ -2,24 +2,35 @@
 import { AttendanceRecord, CompedRecord } from '../types';
 
 /**
- * IMPORTANT: Replace this URL with your deployed Google Apps Script Web App URL.
+ * 🟡 CONFIGURATION REQUIRED 🟡
+ * Paste your Google Apps Script "Web App URL" below.
+ * It should look like: https://script.google.com/macros/s/AKfycb.../exec
  */
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/REPLACE_WITH_YOUR_ID/exec';
+export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFRcChyVLDc6pIN44t-3MgwnSOmRYLXzeOBzeJXUWUwRVUxtDENbsl8UJwZnrSycI/exec';
+
+const isConfigured = () => !GOOGLE_SCRIPT_URL.includes('REPLACE_WITH_YOUR_ID');
 
 const callScript = async (payload: any) => {
-  if (GOOGLE_SCRIPT_URL.includes('REPLACE_WITH_YOUR_ID')) {
-    console.warn("Spreadsheet connection not configured. Please set GOOGLE_SCRIPT_URL in spreadsheetService.ts");
+  if (!isConfigured()) {
+    console.error("SPREADSHEET ERROR: GOOGLE_SCRIPT_URL is not configured in services/spreadsheetService.ts");
     return { error: 'Not configured' };
   }
 
   try {
-    const response = await fetch(GOOGLE_SCRIPT_URL, {
+    // We use 'no-cors' and 'text/plain' to ensure the request is sent 
+    // without triggering a CORS preflight that Google Apps Script doesn't support.
+    await fetch(GOOGLE_SCRIPT_URL, {
       method: 'POST',
-      mode: 'no-cors', // Apps Script requires no-cors for simple POST triggers
-      headers: { 'Content-Type': 'application/json' },
+      mode: 'no-cors',
+      cache: 'no-cache',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
       body: JSON.stringify(payload)
     });
-    // With no-cors, we can't read the response, but it sends successfully
+    
+    // Because mode is 'no-cors', we can't read the response body,
+    // but the request is successfully dispatched to the script.
     return { success: true };
   } catch (error) {
     console.error("Spreadsheet Service Error:", error);
@@ -28,31 +39,28 @@ const callScript = async (payload: any) => {
 };
 
 export const commitAttendance = async (record: AttendanceRecord): Promise<boolean> => {
-  // Writes to "Party Info" tab in Apps Script
   const result = await callScript({ action: 'commitAttendance', ...record });
   return !result.error;
 };
 
 export const commitCompedEntry = async (record: CompedRecord): Promise<boolean> => {
-  // Writes to "Comped" tab in Apps Script
   const result = await callScript({ action: 'commitComped', ...record });
   return !result.error;
 };
 
 export const fetchCurrentSessionState = async (): Promise<any | null> => {
-  if (GOOGLE_SCRIPT_URL.includes('REPLACE_WITH_YOUR_ID')) return null;
+  if (!isConfigured()) return null;
   
   try {
     const response = await fetch(GOOGLE_SCRIPT_URL);
+    if (!response.ok) return null;
     const data = await response.json();
     return data.state;
   } catch (error) {
-    console.error("Failed to fetch state:", error);
     return null;
   }
 };
 
 export const syncCurrentSessionState = async (state: any): Promise<void> => {
-  // Writes to "Session State" tab to allow multi-device syncing
   await callScript({ action: 'syncState', state });
 };

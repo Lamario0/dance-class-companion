@@ -1,9 +1,14 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Plus, Minus, Save, Users, DollarSign, Calculator, UserPlus, RefreshCcw, CheckCircle2, Calendar as CalendarIcon } from 'lucide-react';
-import { commitAttendance, commitCompedEntry, fetchCurrentSessionState, syncCurrentSessionState } from '../services/spreadsheetService';
+import { Plus, Minus, Save, Users, DollarSign, Calculator, UserPlus, RefreshCcw, CheckCircle2, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
+import { commitAttendance, commitCompedEntry, fetchCurrentSessionState, syncCurrentSessionState, GOOGLE_SCRIPT_URL } from '../services/spreadsheetService';
 
 export const CalculatorView: React.FC = () => {
+  // Check if spreadsheet is configured
+  const isSpreadsheetConfigured = useMemo(() => 
+    GOOGLE_SCRIPT_URL && !GOOGLE_SCRIPT_URL.includes('REPLACE_WITH_YOUR_ID')
+  , []);
+
   // Date tracking
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -31,6 +36,7 @@ export const CalculatorView: React.FC = () => {
 
   // Persistence: Fetch on Mount
   useEffect(() => {
+    if (!isSpreadsheetConfigured) return;
     const loadState = async () => {
       const saved = await fetchCurrentSessionState();
       if (saved) {
@@ -45,12 +51,14 @@ export const CalculatorView: React.FC = () => {
       }
     };
     loadState();
-  }, []);
+  }, [isSpreadsheetConfigured]);
 
   // Sync function wrapped in useCallback
   const performSync = useCallback((state: any) => {
-    syncCurrentSessionState(state);
-  }, []);
+    if (isSpreadsheetConfigured) {
+      syncCurrentSessionState(state);
+    }
+  }, [isSpreadsheetConfigured]);
 
   // Persistence: Sync to cloud periodically
   useEffect(() => {
@@ -99,17 +107,19 @@ export const CalculatorView: React.FC = () => {
       setPriceLesson(25);
       setPriceDance(15);
       
-      syncCurrentSessionState({
-        lessonCount: 0,
-        danceOnlyCount: 0,
-        totalManualAdjust: 0,
-        totalCompedCount: 0,
-        splitPersons: 1,
-        customAmount: 0,
-        selectedDate: today,
-        priceLesson: 25,
-        priceDance: 15
-      });
+      if (isSpreadsheetConfigured) {
+        syncCurrentSessionState({
+          lessonCount: 0,
+          danceOnlyCount: 0,
+          totalManualAdjust: 0,
+          totalCompedCount: 0,
+          splitPersons: 1,
+          customAmount: 0,
+          selectedDate: today,
+          priceLesson: 25,
+          priceDance: 15
+        });
+      }
     }
   };
 
@@ -123,16 +133,24 @@ export const CalculatorView: React.FC = () => {
     };
 
     const success = await commitCompedEntry(record);
-    if (success) {
+    if (success || !isSpreadsheetConfigured) {
+      // Allow local updates even if spreadsheet fails/not configured for testing
       setTotalCompedCount(prev => prev + 1);
       setCompedName('');
       setCompedNotes('');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 2000);
+      if (isSpreadsheetConfigured) {
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 2000);
+      }
     }
   };
 
   const handleCalculateSave = async () => {
+    if (!isSpreadsheetConfigured) {
+      alert("Spreadsheet connection not configured. Please add your Web App URL to services/spreadsheetService.ts");
+      return;
+    }
+    
     setIsSaving(true);
     const record = {
       date: selectedDate,
@@ -152,6 +170,21 @@ export const CalculatorView: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Configuration Warning Banner */}
+      {!isSpreadsheetConfigured && (
+        <div className="mb-6 bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 flex items-start gap-3 animate-pulse">
+          <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-rose-400 font-bold text-sm">Spreadsheet Connection Missing</p>
+            <p className="text-rose-400/70 text-xs mt-1">
+              Data will not be saved to Google Sheets. Paste your Web App URL into 
+              <code className="mx-1 px-1 py-0.5 bg-rose-500/20 rounded text-rose-300 font-mono">services/spreadsheetService.ts</code>
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-row items-center justify-between mb-8 gap-2">
         <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
           <div className="flex items-center gap-1 sm:gap-2">
