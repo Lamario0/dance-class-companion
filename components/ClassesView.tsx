@@ -95,10 +95,6 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ classes, videoOfMonth 
                 <div className="absolute -inset-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 rounded-[2.5rem] blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
                 <YouTubeEmbed url={videoOfMonth.url} className="w-full aspect-video rounded-3xl shadow-2xl relative z-10" title={videoOfMonth.title} />
               </div>
-              <div className="mt-8 flex flex-col items-center">
-                <span className="px-4 py-1 rounded-full bg-violet-500/10 text-violet-400 text-xs font-bold border border-violet-500/20 mb-2 tracking-widest uppercase">Now Featuring</span>
-                <h3 className="text-2xl font-bold text-white text-center">{videoOfMonth.title}</h3>
-              </div>
             </div>
           ) : (
             <div className="text-center py-20 bg-slate-950/30 rounded-3xl border border-dashed border-slate-800">
