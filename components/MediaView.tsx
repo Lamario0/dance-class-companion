@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { VideoItem, SongItem } from '../types';
 import { YouTubeEmbed } from './YouTubeEmbed';
-import { Play, Music2, Headphones, Flame, Disc, Search, Mic, X, Loader2, ListMusic, ChevronDown } from 'lucide-react';
+import { Play, Music2, Headphones, Flame, Disc, Search, Mic, X, Loader2, ListMusic, ChevronDown, Radio } from 'lucide-react';
 import { parseVoiceSearch } from '../services/geminiService';
 
 interface MediaViewProps {
@@ -31,7 +31,9 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
   const selectedVideo = tutorials.find(v => v.id === selectedVideoId);
   const isPlaylist = selectedVideo?.id === 'tut-playlist' || selectedVideo?.url.includes('list=');
 
-  const getSongsByCategory = (cat: string) => songs.filter(s => s.category === cat).slice(0, 10);
+  // getSongsByCategory now allows up to 5 as per user request
+  const getSongsByCategory = (cat: string) => songs.filter(s => s.category === cat).slice(0, 5);
+
   const filteredSongs = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase();
@@ -151,7 +153,7 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
                 <p className="font-bold text-slate-100">{s.title}</p>
                 <p className="text-sm text-slate-500">{s.artist}</p>
               </div>
-              <Disc className="w-5 h-5 text-slate-700 group-hover:text-violet-500 transition-colors" />
+              <SongLinkIcon url={s.url} className="w-5 h-5" />
             </a>
           ))}
           {filteredSongs.length === 0 && <p className="text-center py-10 text-slate-600 italic">No songs found.</p>}
@@ -167,21 +169,36 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
   );
 };
 
+const SongLinkIcon = ({ url, className }: { url: string; className?: string }) => {
+  const isSpotify = url.includes('spotify.com');
+  const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+  
+  if (isSpotify) return <Radio className={`${className} text-emerald-500`} />;
+  if (isYouTube) return <Play className={`${className} text-rose-500 fill-current`} />;
+  return <Disc className={`${className} text-slate-700 group-hover:text-violet-500 transition-colors`} />;
+};
+
 const SongColumn = ({ title, icon, songs, color }: any) => (
-  <div className="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden flex flex-col">
+  <div className="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden flex flex-col min-h-[340px]">
     <div className={`p-5 flex items-center gap-3 font-black uppercase tracking-widest text-xs border-b border-slate-800 bg-slate-800/20 text-${color}-400`}>
       {icon} {title}
     </div>
-    <div className="p-3 space-y-1">
-      {songs.map((s: any) => (
-        <a key={s.id} href={s.url} target="_blank" rel="noopener" className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-800 transition-colors group">
-          <div className="overflow-hidden">
-            <p className="text-sm font-bold text-slate-200 truncate">{s.title}</p>
-            <p className="text-[10px] text-slate-500 truncate">{s.artist}</p>
-          </div>
-          <Disc className="w-4 h-4 text-slate-800 group-hover:text-slate-600 shrink-0" />
-        </a>
-      ))}
+    <div className="p-3 space-y-1 flex-1">
+      {songs.length > 0 ? (
+        songs.map((s: any) => (
+          <a key={s.id} href={s.url} target="_blank" rel="noopener" className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-800 transition-colors group">
+            <div className="overflow-hidden pr-2">
+              <p className="text-sm font-bold text-slate-200 truncate">{s.title}</p>
+              <p className="text-[10px] text-slate-500 truncate">{s.artist}</p>
+            </div>
+            <SongLinkIcon url={s.url} className="w-4 h-4 shrink-0" />
+          </a>
+        ))
+      ) : (
+        <div className="h-full flex items-center justify-center p-8 text-center">
+          <p className="text-slate-600 text-[10px] font-medium uppercase tracking-widest">Awaiting Playlist</p>
+        </div>
+      )}
     </div>
   </div>
 );
