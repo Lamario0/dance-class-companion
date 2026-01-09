@@ -60,8 +60,6 @@ export const fetchSheetData = async (): Promise<AppData> => {
     // --- 1. CLASSES ---
     // Rule: Classes occupy Row 2, 3, 4, 5 (Indices 1-4).
     // CRITICAL: We must stop BEFORE the first Music Header.
-    // If the API skips Row 5 (empty), the First Header might shift to Index 4.
-    // This logic ensures we never read the Header as a Class.
     const classes: DanceClass[] = [];
     const firstHeaderIndex = headerIndices.length > 0 ? headerIndices[0] : 999;
     
@@ -117,27 +115,33 @@ export const fetchSheetData = async (): Promise<AppData> => {
     });
 
     // --- 3. VIDEO OF THE MONTH ---
-    // Usually located after the 3rd music block.
-    // We scan for a row where Col A looks like a URL in the lower section of the sheet.
-    const videos: VideoItem[] = [];
+    // Logic: Locate the "Video of the Month" header explicitly in Column A.
+    // The data is in the row immediately following the header.
     
-    // Start scanning AFTER the last music header to avoid false positives
-    const lastMusicHeader = headerIndices.length > 0 ? headerIndices[headerIndices.length - 1] : 20;
-    const scanStart = lastMusicHeader + 6; // Skip the music data rows
+    const videos: VideoItem[] = [];
+    let vomDataRowIndex = -1;
 
-    let vomFound = false;
-    for (let i = scanStart; i < Math.min(scanStart + 10, rows.length); i++) {
-       const cellA = getCell(i, 0);
-       const potentialUrl = extractUrl(cellA);
-       // If Col A contains a URL, it's the VOM (Video of Month)
-       if (potentialUrl && !vomFound) {
+    // Scan specifically for the header to avoid issues with skipped spacer rows
+    for (let i = 0; i < rows.length; i++) {
+      const cellValue = getCell(i, 0).toLowerCase();
+      if (cellValue.includes('video of the month')) {
+        vomDataRowIndex = i + 1; // Data is expected in the immediate next row
+        break;
+      }
+    }
+    
+    // Strict extraction: Only check this specific row for the VOM
+    if (vomDataRowIndex !== -1 && vomDataRowIndex < rows.length) {
+       const cellValue = getCell(vomDataRowIndex, 0);
+       const url = extractUrl(cellValue);
+       
+       if (url) {
          videos.push({
            id: 'vom',
            title: 'Featured Pattern',
-           url: potentialUrl,
+           url: url,
            category: 'month'
          });
-         vomFound = true; // Only take one
        }
     }
 
@@ -155,25 +159,44 @@ export const fetchSheetData = async (): Promise<AppData> => {
     }
 
     // --- 5. ANNOUNCEMENTS ---
-    // Found below the music/video sections.
-    // We assume they start after the scan area for VOM.
-    const annStart = scanStart + 2; 
-    const announcements: Announcement[] = [];
+    // User Specification:
+    // - Columns A & B.
+    // - Two header rows (e.g. Row 31 "Announcements", Row 32 "Date/Details").
+    // - Data starts after these two rows.
+    // - Use content-aware anchor.
     
-    for (let i = annStart; i < rows.length; i++) {
-      const colA = getCell(i, 0);
-      const colB = getCell(i, 1);
-      
-      // Simple heuristic: Col A has date-like text or just isn't empty, Col B has text
-      // And strictly exclude "Title/Artist" headers just in case
-      if (colB && colB !== '-' && colA.toLowerCase() !== 'title') {
-         // It's an announcement if it has text in Col B. 
-         // Col A is optional (date), but usually present.
-         announcements.push({
-           id: `ann-${i}`,
-           date: colA,
-           text: colB
-         });
+    const announcements: Announcement[] = [];
+    let annAnchorIndex = -1;
+
+    // Scan for the "Announcements" anchor in Column A
+    for (let i = 0; i < rows.length; i++) {
+      const val = getCell(i, 0).toLowerCase();
+      if (val.includes('announcements')) {
+        annAnchorIndex = i;
+        break;
+      }
+    }
+
+    if (annAnchorIndex !== -1) {
+      // We assume two header rows: 
+      // 1. The Anchor Row found (e.g., 31)
+      // 2. The sub-header row (e.g., 32)
+      // Data starts at Anchor + 2
+      const startDataIndex = annAnchorIndex + 2;
+
+      for (let i = startDataIndex; i < rows.length; i++) {
+        const date = getCell(i, 0); // Col A
+        const text = getCell(i, 1); // Col B
+        
+        // Stop if we hit emptiness or structural breaks. 
+        // We require 'text' for it to be a valid announcement.
+        if (text && text !== '-') {
+           announcements.push({
+             id: `ann-${i}`,
+             date: date,
+             text: text
+           });
+        }
       }
     }
 
