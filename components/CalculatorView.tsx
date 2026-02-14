@@ -33,6 +33,7 @@ export const CalculatorView: React.FC = () => {
   // UI State
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('Changes Saved!');
 
   // Persistence: Fetch on Mount
   useEffect(() => {
@@ -91,36 +92,38 @@ export const CalculatorView: React.FC = () => {
   const instructorPool = Math.ceil(totalRevenue * 0.5);
   const perPersonSplit = Math.ceil(instructorPool / splitPersons);
 
-  const handleClearAll = () => {
-    if (window.confirm("Are you sure you want to clear all data and counters for this session? This cannot be undone.")) {
-      const today = new Date().toISOString().split('T')[0];
-      
-      setLessonCount(0);
-      setDanceOnlyCount(0);
-      setTotalManualAdjust(0);
-      setTotalCompedCount(0);
-      setCustomAmount(0);
-      setCompedName('');
-      setCompedNotes('');
-      setSplitPersons(1);
-      setSelectedDate(today);
-      setPriceLesson(25);
-      setPriceDance(15);
-      
-      if (isSpreadsheetConfigured) {
-        syncCurrentSessionState({
-          lessonCount: 0,
-          danceOnlyCount: 0,
-          totalManualAdjust: 0,
-          totalCompedCount: 0,
-          splitPersons: 1,
-          customAmount: 0,
-          selectedDate: today,
-          priceLesson: 25,
-          priceDance: 15
-        });
-      }
+  const handleClearAll = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // 1. Reset Counters
+    setLessonCount(0);
+    setDanceOnlyCount(0);
+    setTotalManualAdjust(0);
+    setTotalCompedCount(0);
+    setCustomAmount(0);
+    
+    // 2. Reset Inputs
+    setCompedName('');
+    setCompedNotes('');
+    
+    // 3. Force a sync immediately with the zeroed values
+    if (isSpreadsheetConfigured) {
+      syncCurrentSessionState({
+        lessonCount: 0,
+        danceOnlyCount: 0,
+        totalManualAdjust: 0,
+        totalCompedCount: 0,
+        splitPersons, // Keep current
+        customAmount: 0,
+        selectedDate, // Keep current
+        priceLesson,  // Keep current
+        priceDance    // Keep current
+      });
     }
+
+    setSuccessMessage('Counters Cleared');
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 2000);
   };
 
   const handleAddComped = async () => {
@@ -139,6 +142,7 @@ export const CalculatorView: React.FC = () => {
       setCompedName('');
       setCompedNotes('');
       if (isSpreadsheetConfigured) {
+        setSuccessMessage('Guest Added');
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 2000);
       }
@@ -165,6 +169,7 @@ export const CalculatorView: React.FC = () => {
     const success = await commitAttendance(record);
     setIsSaving(false);
     if (success) {
+      setSuccessMessage('Report Saved!');
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     }
@@ -207,8 +212,9 @@ export const CalculatorView: React.FC = () => {
         </div>
         
         <button 
+          type="button"
           onClick={handleClearAll}
-          className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all text-[10px] sm:text-sm font-black shadow-lg flex-shrink-0"
+          className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all text-[10px] sm:text-sm font-black shadow-lg flex-shrink-0 active:scale-95"
         >
           <RefreshCcw className="w-3.5 h-3.5 shrink-0" />
           <span>Clear All</span>
@@ -378,7 +384,7 @@ export const CalculatorView: React.FC = () => {
           <div className="p-1 bg-white/20 rounded-full">
             <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <span className="font-black text-sm sm:text-lg">Changes Saved!</span>
+          <span className="font-black text-sm sm:text-lg">{successMessage}</span>
         </div>
       )}
     </div>

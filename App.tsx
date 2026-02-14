@@ -6,7 +6,7 @@ import { ClassesView } from './components/ClassesView';
 import { MediaView } from './components/MediaView';
 import { AnnouncementsView } from './components/AnnouncementsView';
 import { CalculatorView } from './components/CalculatorView';
-import { Library, Users, Loader2, Megaphone, Lock, ShieldAlert } from 'lucide-react';
+import { Library, Users, Loader2, Megaphone, Lock, ShieldAlert, LogOut } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.CLASSES);
@@ -31,10 +31,13 @@ const App: React.FC = () => {
   }, []);
 
   const navigateTo = (tab: Tab) => {
-    if (activeTab === Tab.CALCULATOR && tab !== Tab.CALCULATOR) {
-      setIsAuthenticated(false);
-    }
+    // We allow navigation without logging out the admin
     setActiveTab(tab);
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setActiveTab(Tab.CLASSES);
   };
 
   const handleLogoClick = () => {
@@ -128,15 +131,24 @@ const App: React.FC = () => {
               <span>News</span>
             </button>
             {isAuthenticated && (
-              <button
-                onClick={() => navigateTo(Tab.CALCULATOR)}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
-                  activeTab === Tab.CALCULATOR ? 'bg-violet-600 text-white shadow-sm' : 'text-violet-400/60 hover:text-violet-400'
-                }`}
-              >
-                <ShieldAlert className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
-                <span>Admin</span>
-              </button>
+              <>
+                <button
+                  onClick={() => navigateTo(Tab.CALCULATOR)}
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
+                    activeTab === Tab.CALCULATOR ? 'bg-violet-600 text-white shadow-sm' : 'text-violet-400/60 hover:text-violet-400'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
+                  <span>Admin</span>
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 text-rose-400 hover:text-rose-200 hover:bg-rose-500/20"
+                >
+                  <LogOut className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">Exit</span>
+                </button>
+              </>
             )}
           </nav>
         </div>
@@ -203,7 +215,7 @@ const App: React.FC = () => {
               <MediaView videos={data.videos} songs={data.songs} />
             )}
             {activeTab === Tab.ANNOUNCEMENTS && (
-              <AnnouncementsView announcements={data.announcements} />
+              <AnnouncementsView announcements={data.announcements} isAdmin={isAuthenticated} />
             )}
             {activeTab === Tab.CALCULATOR && isAuthenticated && (
               <CalculatorView />
