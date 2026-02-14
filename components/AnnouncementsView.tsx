@@ -213,18 +213,22 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
          </div>
 
          {/* Comments List */}
-         <div className="space-y-4">
-            {comments.map(comment => (
-              <CommentItem 
-                key={comment.id} 
-                comment={comment} 
-                isAdmin={isAdmin} 
-                onDelete={handleDelete} 
-                onEdit={handleEdit}
-                onReply={handleReply}
-                depth={0}
-              />
-            ))}
+         <div className={comments.length > 2 ? "bg-slate-950/30 rounded-3xl border border-slate-800 overflow-hidden" : ""}>
+           <div className={comments.length > 2 
+             ? "max-h-[600px] overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-600" 
+             : "space-y-4"}>
+              {comments.map(comment => (
+                <CommentItem 
+                  key={comment.id} 
+                  comment={comment} 
+                  isAdmin={isAdmin} 
+                  onDelete={handleDelete} 
+                  onEdit={handleEdit}
+                  onReply={handleReply}
+                  depth={0}
+                />
+              ))}
+           </div>
          </div>
       </div>
     </div>
