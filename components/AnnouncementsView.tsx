@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types';
 import { Megaphone, Calendar, Bell, MessageSquare, Trash2, Edit2, Save, X, Reply, ChevronDown, ChevronUp } from 'lucide-react';
@@ -142,17 +141,17 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
     const key = color?.toLowerCase().trim() || 'white';
     switch(key) {
       case 'green':
-        return 'border-l-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-100';
+        return 'bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-100';
       case 'yellow':
-        return 'border-l-yellow-400 bg-yellow-400/5 hover:bg-yellow-400/10 text-yellow-50';
+        return 'bg-yellow-400/5 hover:bg-yellow-400/10 text-yellow-50';
       case 'orange':
-        return 'border-l-orange-500 bg-orange-500/5 hover:bg-orange-500/10 text-orange-50';
+        return 'bg-orange-500/5 hover:bg-orange-500/10 text-orange-50';
       case 'red':
       case 'maroon':
-        return 'border-l-rose-800 bg-rose-900/10 hover:bg-rose-900/20 text-rose-50';
+        return 'bg-rose-900/10 hover:bg-rose-900/20 text-rose-50';
       case 'white':
       default:
-        return 'border-l-slate-400 bg-slate-800/20 hover:bg-slate-800/40 text-slate-200';
+        return 'bg-slate-800/20 hover:bg-slate-800/40 text-slate-200';
     }
   };
 
@@ -206,7 +205,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
               return (
                 <div 
                   key={ann.id} 
-                  className={`transition-all duration-300 border-l-4 ${getAnnouncementStyle(ann.color)} ${hasDetails ? 'cursor-pointer' : ''}`}
+                  className={`transition-all duration-300 ${getAnnouncementStyle(ann.color)} ${hasDetails ? 'cursor-pointer' : ''}`}
                   onClick={() => hasDetails && toggleExpand(ann.id)}
                 >
                   <div className="p-5 sm:p-6">
