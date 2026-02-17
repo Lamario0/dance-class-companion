@@ -187,6 +187,8 @@ export const fetchSheetData = async (): Promise<AppData> => {
       for (let i = startDataIndex; i < rows.length; i++) {
         const date = getCell(i, 0); // Col A
         const text = getCell(i, 1); // Col B
+        const details = getCell(i, 2); // Col C
+        const color = getCell(i, 3); // Col D
         
         // Stop if we hit emptiness or structural breaks. 
         // We require 'text' for it to be a valid announcement.
@@ -194,7 +196,9 @@ export const fetchSheetData = async (): Promise<AppData> => {
            announcements.push({
              id: `ann-${i}`,
              date: date,
-             text: text
+             text: text,
+             details: details,
+             color: color
            });
         }
       }
