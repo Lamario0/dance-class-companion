@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types';
-import { Megaphone, Calendar, Bell, MessageSquare, User, Trash2, Edit2, CornerDownRight, Save, X, Reply } from 'lucide-react';
+import { Megaphone, Calendar, Bell, MessageSquare, Trash2, Edit2, Save, X, Reply, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface AnnouncementsViewProps {
   announcements: Announcement[];
@@ -18,10 +18,20 @@ interface Comment {
 
 const STORAGE_KEY = 'dance_app_comments_v1';
 
+// Legend colors mapping
+const LEGEND = [
+  { label: 'Local Events', colorClass: 'bg-emerald-500', textClass: 'text-emerald-400', key: 'green' },
+  { label: 'Non WCS Events', colorClass: 'bg-yellow-500', textClass: 'text-yellow-400', key: 'yellow' },
+  { label: 'Weekend Events', colorClass: 'bg-orange-500', textClass: 'text-orange-400', key: 'orange' },
+  { label: 'Out of Area (Small)', colorClass: 'bg-rose-800', textClass: 'text-rose-400', key: 'red' },
+  { label: 'Misc/Other', colorClass: 'bg-slate-400', textClass: 'text-slate-400', key: 'white' }
+];
+
 export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announcements, isAdmin = false }) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newAuthor, setNewAuthor] = useState('');
   const [newText, setNewText] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Load comments from local storage
   useEffect(() => {
@@ -67,7 +77,6 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
 
     setComments(prev => [newComment, ...prev]);
     setNewText('');
-    // We keep the author name for convenience
   };
 
   const updateCommentTree = (items: Comment[], targetId: string, action: (item: Comment) => Comment | null): Comment[] => {
@@ -107,14 +116,19 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
     })));
   };
 
+  const toggleExpand = (id: string) => {
+    setExpandedId(prev => prev === id ? null : id);
+  };
+
   // Helper to detect URLs and wrap them in anchor tags
   const renderTextWithLinks = (text: string) => {
+    if (!text) return null;
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
     return text.split(urlRegex).map((part, index) => {
       if (part.match(urlRegex)) {
         const href = part.startsWith('www.') ? `https://${part}` : part;
         return (
-          <a key={index} href={href} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline break-all">
+          <a key={index} href={href} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline break-all relative z-20">
             {part}
           </a>
         );
@@ -123,44 +137,124 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
     });
   };
 
+  // Styles based on color column
+  const getAnnouncementStyle = (color?: string) => {
+    const key = color?.toLowerCase().trim() || 'white';
+    switch(key) {
+      case 'green':
+        return 'border-l-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-100';
+      case 'yellow':
+        return 'border-l-yellow-400 bg-yellow-400/5 hover:bg-yellow-400/10 text-yellow-50';
+      case 'orange':
+        return 'border-l-orange-500 bg-orange-500/5 hover:bg-orange-500/10 text-orange-50';
+      case 'red':
+      case 'maroon':
+        return 'border-l-rose-800 bg-rose-900/10 hover:bg-rose-900/20 text-rose-50';
+      case 'white':
+      default:
+        return 'border-l-slate-400 bg-slate-800/20 hover:bg-slate-800/40 text-slate-200';
+    }
+  };
+
+  const getBadgeColor = (color?: string) => {
+    const key = color?.toLowerCase().trim() || 'white';
+    switch(key) {
+      case 'green': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+      case 'yellow': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'orange': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      case 'red':
+      case 'maroon': return 'bg-rose-900/30 text-rose-400 border-rose-800/40';
+      default: return 'bg-slate-700/50 text-slate-300 border-slate-600/30';
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto pb-20 space-y-12">
       {/* Official Announcements */}
       <div className="bg-slate-900 rounded-3xl shadow-sm border border-slate-800 overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-slate-800 flex items-center gap-3 bg-gradient-to-r from-slate-900 to-slate-800">
-           <div className="p-3 bg-rose-500/10 text-rose-400 rounded-xl ring-1 ring-rose-500/20">
-             <Megaphone className="w-6 h-6" />
+        <div className="p-6 md:p-8 border-b border-slate-800 flex flex-col md:flex-row md:items-start justify-between gap-6 bg-gradient-to-b from-slate-900 to-slate-800/50">
+           <div className="flex items-center gap-3">
+             <div className="p-3 bg-rose-500/10 text-rose-400 rounded-xl ring-1 ring-rose-500/20">
+               <Megaphone className="w-6 h-6" />
+             </div>
+             <div>
+               <h2 className="text-2xl font-bold text-white">Announcements</h2>
+               <p className="text-slate-400 text-sm">Upcoming events & updates</p>
+             </div>
            </div>
-           <div>
-             <h2 className="text-2xl font-bold text-white">Announcements</h2>
-             <p className="text-slate-400 text-sm">Latest updates from the studio</p>
+           
+           {/* Legend - Top Right Box */}
+           <div className="bg-slate-950/50 rounded-xl p-4 border border-slate-800">
+              <span className="block text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-wider border-b border-slate-800/50 pb-2">Event Key</span>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+                {LEGEND.map((item) => (
+                  <div key={item.key} className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${item.colorClass}`}></div>
+                    <span className={`text-[10px] sm:text-xs font-medium ${item.textClass} whitespace-nowrap`}>{item.label}</span>
+                  </div>
+                ))}
+              </div>
            </div>
         </div>
 
         <div className="divide-y divide-slate-800/50">
           {announcements.length > 0 ? (
-            announcements.map((ann) => (
-              <div key={ann.id} className="p-6 hover:bg-slate-800/30 transition-colors">
-                <div className="flex flex-col sm:flex-row gap-4">
-                   {/* Date Badge */}
-                   {ann.date && (
-                     <div className="flex-shrink-0">
-                       <div className="inline-flex flex-col items-center justify-center min-w-[80px] px-3 py-2 bg-slate-950 rounded-lg border border-slate-800 text-center">
-                         <Calendar className="w-4 h-4 text-rose-400 mb-1" />
-                         <span className="text-sm font-bold text-slate-200">{ann.date}</span>
+            announcements.map((ann) => {
+              const isExpanded = expandedId === ann.id;
+              const hasDetails = !!ann.details;
+              
+              return (
+                <div 
+                  key={ann.id} 
+                  className={`transition-all duration-300 border-l-4 ${getAnnouncementStyle(ann.color)} ${hasDetails ? 'cursor-pointer' : ''}`}
+                  onClick={() => hasDetails && toggleExpand(ann.id)}
+                >
+                  <div className="p-5 sm:p-6">
+                    <div className="flex flex-col sm:flex-row gap-4 items-start">
+                       {/* Date Badge */}
+                       {ann.date && (
+                         <div className="flex-shrink-0">
+                           <div className={`inline-flex flex-col items-center justify-center min-w-[80px] px-3 py-2 rounded-lg border text-center ${getBadgeColor(ann.color)}`}>
+                             <Calendar className="w-4 h-4 mb-1 opacity-80" />
+                             <span className="text-sm font-bold">{ann.date}</span>
+                           </div>
+                         </div>
+                       )}
+                       
+                       {/* Content */}
+                       <div className="flex-1 w-full">
+                         <div className="flex justify-between items-start gap-4">
+                           <h3 className="text-lg font-bold leading-tight mb-1">
+                             {renderTextWithLinks(ann.text)}
+                           </h3>
+                           {hasDetails && (
+                             <div className="text-slate-500 mt-1">
+                               {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                             </div>
+                           )}
+                         </div>
+                         
+                         {!hasDetails && !isExpanded && (
+                            <p className="text-sm text-slate-400 mt-1 italic">No additional details</p>
+                         )}
+
+                         {/* Collapsible Details */}
+                         <div className={`grid transition-all duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'}`}>
+                           <div className="overflow-hidden">
+                             <div className="pt-3 border-t border-slate-700/30 text-sm leading-relaxed opacity-90 whitespace-pre-wrap flex gap-3">
+                               <span className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1 flex-shrink-0 select-none">Details</span>
+                               <div>
+                                 {renderTextWithLinks(ann.details || '')}
+                               </div>
+                             </div>
+                           </div>
+                         </div>
                        </div>
-                     </div>
-                   )}
-                   
-                   {/* Content */}
-                   <div className="flex-1">
-                     <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">
-                       {renderTextWithLinks(ann.text)}
-                     </p>
-                   </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="p-12 text-center flex flex-col items-center justify-center text-slate-500">
               <Bell className="w-12 h-12 mb-4 opacity-20" />

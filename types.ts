@@ -25,6 +25,8 @@ export interface Announcement {
   id: string;
   date: string;
   text: string;
+  details?: string;
+  color?: string;
 }
 
 export interface AppData {
