@@ -146,7 +146,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
       if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/web-storage-unsupported') {
         setLoginError("Sign-in popup was blocked or closed. Please try opening the app in a new tab (using the button in the top right) to sign in.");
       } else if (error.code === 'auth/unauthorized-domain') {
-        setLoginError("This domain is not authorized for OAuth operations. Please add this app's URL to your Firebase Console > Authentication > Settings > Authorized domains.");
+        setLoginError(`This domain (${window.location.hostname}) is not authorized for OAuth operations. Please add exactly this domain to your Firebase Console > Authentication > Settings > Authorized domains.`);
       } else {
         setLoginError(error.message || "An error occurred during sign in.");
       }
