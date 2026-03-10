@@ -90,6 +90,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -136,11 +137,19 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   }, [authReady]);
 
   const handleLogin = async () => {
+    setLoginError(null);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error signing in", error);
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/web-storage-unsupported') {
+        setLoginError("Sign-in popup was blocked or closed. Please try opening the app in a new tab (using the button in the top right) to sign in.");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        setLoginError("This domain is not authorized for OAuth operations. Please add this app's URL to your Firebase Console > Authentication > Settings > Authorized domains.");
+      } else {
+        setLoginError(error.message || "An error occurred during sign in.");
+      }
     }
   };
 
@@ -381,14 +390,21 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 focus:border-violet-500 outline-none text-sm font-bold"
                    />
                  </div>
-                 <button 
-                   type="button"
-                   onClick={handleLogin}
-                   className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 hover:bg-slate-700 rounded-xl font-bold text-sm transition-colors whitespace-nowrap"
-                 >
-                   <LogIn className="w-4 h-4" />
-                   Sign in
-                 </button>
+                 <div className="flex flex-col items-end gap-2">
+                   <button 
+                     type="button"
+                     onClick={handleLogin}
+                     className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 hover:bg-slate-700 rounded-xl font-bold text-sm transition-colors whitespace-nowrap"
+                   >
+                     <LogIn className="w-4 h-4" />
+                     Sign in
+                   </button>
+                 </div>
+               </div>
+             )}
+             {loginError && (
+               <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs p-3 rounded-lg mb-2">
+                 {loginError}
                </div>
              )}
              <div>
