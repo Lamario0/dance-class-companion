@@ -92,6 +92,9 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   const [authReady, setAuthReady] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  // Only grant comment admin privileges if actually signed in to Firebase as admin
+  const isActuallyAdmin = user?.email === 'Lamariow@gmail.com' || user?.email === 'lamariow@gmail.com';
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -457,12 +460,12 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                 </div>
               </div>
 
-              {comments.filter(c => isAdmin || !c.hidden).map(comment => (
+              {comments.filter(c => isActuallyAdmin || !c.hidden).map(comment => (
                 <CommentItem 
                   key={comment.id} 
                   comment={comment} 
                   currentUser={user}
-                  isAdmin={isAdmin} 
+                  isAdmin={isActuallyAdmin} 
                   onDelete={handleDelete} 
                   onEdit={handleEdit}
                   onReply={handleReply}

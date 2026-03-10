@@ -7,6 +7,8 @@ import { MediaView } from './components/MediaView';
 import { AnnouncementsView } from './components/AnnouncementsView';
 import { CalculatorView } from './components/CalculatorView';
 import { Library, Users, Loader2, Megaphone, Lock, ShieldAlert, LogOut } from 'lucide-react';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.CLASSES);
@@ -28,6 +30,14 @@ const App: React.FC = () => {
       setLoading(false);
     };
     loadData();
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && (user.email === 'Lamariow@gmail.com' || user.email === 'lamariow@gmail.com')) {
+        setIsAuthenticated(true);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const navigateTo = (tab: Tab) => {
@@ -35,9 +45,14 @@ const App: React.FC = () => {
     setActiveTab(tab);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsAuthenticated(false);
     setActiveTab(Tab.CLASSES);
+    try {
+      await auth.signOut();
+    } catch (error) {
+      console.error("Error signing out", error);
+    }
   };
 
   const handleLogoClick = () => {
