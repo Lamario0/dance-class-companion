@@ -1,0 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: comments
+    // Document ID: auto-generated
+    // Fields:
+    //   - author: string (required, < 50 chars) - The name of the author
+    //   - authorUid: string (required, immutable) - The UID of the author
+    //   - text: string (required, < 1000 chars) - The content of the comment
+    //   - date: string (required, < 50 chars) - The date the comment was posted
+    //   - timestamp: number (required) - The timestamp the comment was posted
+    //   - parentId: string (optional, < 50 chars) - The ID of the parent comment
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+       return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+       return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+       return isAuthenticated() && request.auth.uid == resource.data.authorUid;
+    }
+    
+    function isAdmin() {
+       return isAuthenticated() && request.auth.token.email == "Lamariow@gmail.com";
+    }
+    
+    function isAnonymousCreate() {
+       return !isAuthenticated() && request.resource.data.authorUid == 'anonymous';
+    }
+    
+    function isAuthCreate() {
+       return isAuthenticated() && request.resource.data.authorUid == request.auth.uid;
+    }
+    
+    function uidUnchanged() {
+       return !('authorUid' in request.resource.data) ||
+         request.resource.data.authorUid == request.auth.uid ||
+         request.resource.data.authorUid == 'anonymous';
+    }
+    
+    function uidNotModified() {
+       return !('authorUid' in request.resource.data) ||
+         request.resource.data.authorUid == resource.data.authorUid;
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidComment(data) {
+      return hasOnlyAllowedFields(['author', 'authorUid', 'text', 'date', 'timestamp', 'parentId', 'hidden']) &&
+             data.author is string && data.author.size() > 0 && data.author.size() < 50 &&
+             data.authorUid is string && data.authorUid.size() > 0 && data.authorUid.size() < 50 &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.date is string && data.date.size() > 0 && data.date.size() < 50 &&
+             data.timestamp is number &&
+             (!('parentId' in data) || data.parentId == null || (data.parentId is string && data.parentId.size() < 50)) &&
+             (!('hidden' in data) || data.hidden is bool);
+    }
+
+    match /comments/{commentId} {
+      // Anyone can read comments
+      allow read: if true;
+      
+      // Anyone can create a comment (authenticated or anonymous)
+      allow create: if isValidComment(request.resource.data) && (isAuthCreate() || isAnonymousCreate());
+      
+      // Only the author (if not anonymous) or admin can update or delete their comment
+      allow update: if isValidComment(request.resource.data) && uidNotModified() && (
+        (isAuthenticated() && isDocOwner() && resource.data.authorUid != 'anonymous') || isAdmin()
+      );
+      allow delete: if (isAuthenticated() && isDocOwner() && resource.data.authorUid != 'anonymous') || isAdmin();
+    }
+  }
+}

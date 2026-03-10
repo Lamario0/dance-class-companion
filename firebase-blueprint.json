@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment in the community chat",
+      "type": "object",
+      "properties": {
+        "author": {
+          "type": "string",
+          "description": "The name of the author"
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "The UID of the author"
+        },
+        "text": {
+          "type": "string",
+          "description": "The content of the comment"
+        },
+        "date": {
+          "type": "string",
+          "description": "The date the comment was posted"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "The timestamp the comment was posted"
+        },
+        "parentId": {
+          "type": "string",
+          "description": "The ID of the parent comment, if this is a reply"
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Whether the comment is hidden by an admin"
+        }
+      },
+      "required": ["author", "authorUid", "text", "date", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/comments/{commentId}": {
+      "schema": {
+        "$ref": "#/entities/Comment"
+      },
+      "description": "The collection of comments and replies"
+    }
+  }
+}

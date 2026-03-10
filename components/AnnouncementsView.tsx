@@ -1,6 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { Announcement } from '../types';
-import { Megaphone, Calendar, Bell, MessageSquare, Trash2, Edit2, Save, X, Reply, ChevronDown, ChevronUp } from 'lucide-react';
+import { Announcement } from '../types'; // Adjust path if needed
+import { Megaphone, Calendar, Bell, MessageSquare, Trash2, Edit2, Save, X, Reply, ChevronDown, ChevronUp, LogIn, Eye, EyeOff } from 'lucide-react';
+
+import { db, auth } from '../firebase';
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string;
+    email?: string | null;
+    emailVerified?: boolean;
+    isAnonymous?: boolean;
+    tenantId?: string | null;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 interface AnnouncementsViewProps {
   announcements: Announcement[];
@@ -10,12 +65,14 @@ interface AnnouncementsViewProps {
 interface Comment {
   id: string;
   author: string;
+  authorUid: string;
   text: string;
   date: string;
-  replies: Comment[];
+  timestamp: number;
+  parentId: string | null;
+  hidden?: boolean;
+  replies?: Comment[];
 }
-
-const STORAGE_KEY = 'dance_app_comments_v1';
 
 // Legend colors mapping
 const LEGEND = [
@@ -28,98 +85,136 @@ const LEGEND = [
 
 export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announcements, isAdmin = false }) => {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [newAuthor, setNewAuthor] = useState('');
   const [newText, setNewText] = useState('');
+  const [newAuthor, setNewAuthor] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
-  // Load comments from local storage
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setComments(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse comments", e);
-      }
-    } else {
-      // Default welcome comment
-      setComments([
-        {
-          id: '1',
-          author: 'Studio Admin',
-          text: 'Welcome to the community discussion! Feel free to ask questions or chat about this week’s class below.',
-          date: new Date().toLocaleDateString(),
-          replies: []
-        }
-      ]);
-    }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthReady(true);
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Save comments to local storage whenever they change
   useEffect(() => {
-    if (comments.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
+    if (!authReady) return;
+
+    const q = query(collection(db, 'comments'), orderBy('timestamp', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const flatComments = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Comment[];
+      
+      // Build tree
+      const commentMap = new Map<string, Comment>();
+      flatComments.forEach(c => commentMap.set(c.id, { ...c, replies: [] }));
+      
+      const rootComments: Comment[] = [];
+      flatComments.forEach(c => {
+        if (c.parentId) {
+          const parent = commentMap.get(c.parentId);
+          if (parent) {
+            parent.replies = parent.replies || [];
+            parent.replies.push(commentMap.get(c.id)!);
+          }
+        } else {
+          rootComments.push(commentMap.get(c.id)!);
+        }
+      });
+      
+      setComments(rootComments);
+    }, (error) => {
+       handleFirestoreError(error, OperationType.GET, 'comments');
+    });
+
+    return () => unsubscribe();
+  }, [authReady]);
+
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Error signing in", error);
     }
-  }, [comments]);
+  };
 
-  const handlePostComment = (e: React.FormEvent) => {
+  const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAuthor.trim() || !newText.trim()) return;
+    if (!newText.trim()) return;
+    if (!user && !newAuthor.trim()) return;
 
-    const newComment: Comment = {
-      id: Date.now().toString(),
-      author: newAuthor.trim(),
+    const newComment = {
+      author: user ? (user.displayName || 'Anonymous') : newAuthor.trim(),
+      authorUid: user ? user.uid : 'anonymous',
       text: newText.trim(),
       date: new Date().toLocaleDateString(),
-      replies: []
+      timestamp: Date.now(),
+      parentId: null,
+      hidden: false
     };
 
-    setComments(prev => [newComment, ...prev]);
-    setNewText('');
+    try {
+      await addDoc(collection(db, 'comments'), newComment);
+      setNewText('');
+      setNewAuthor('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'comments');
+    }
   };
 
-  const updateCommentTree = (items: Comment[], targetId: string, action: (item: Comment) => Comment | null): Comment[] => {
-    return items.map(item => {
-      if (item.id === targetId) {
-        return action(item);
-      }
-      if (item.replies.length > 0) {
-        const updatedReplies = updateCommentTree(item.replies, targetId, action).filter(Boolean) as Comment[];
-        return { ...item, replies: updatedReplies };
-      }
-      return item;
-    }).filter(Boolean) as Comment[];
-  };
-
-  const handleDelete = (commentId: string) => {
+  const handleDelete = async (commentId: string) => {
     if (!window.confirm("Delete this comment?")) return;
-    setComments(prev => updateCommentTree(prev, commentId, () => null));
+    try {
+      await deleteDoc(doc(db, 'comments', commentId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `comments/${commentId}`);
+    }
   };
 
-  const handleEdit = (commentId: string, newText: string) => {
-    setComments(prev => updateCommentTree(prev, commentId, (item) => ({ ...item, text: newText })));
+  const handleEdit = async (commentId: string, newText: string) => {
+    try {
+      await updateDoc(doc(db, 'comments', commentId), { text: newText });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `comments/${commentId}`);
+    }
   };
 
-  const handleReply = (parentId: string, author: string, text: string) => {
-    const reply: Comment = {
-      id: Date.now().toString(),
-      author,
-      text,
+  const handleToggleHide = async (commentId: string, currentHidden: boolean) => {
+    try {
+      await updateDoc(doc(db, 'comments', commentId), { hidden: !currentHidden });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `comments/${commentId}`);
+    }
+  };
+
+  const handleReply = async (parentId: string, text: string, authorName?: string) => {
+    const reply = {
+      author: user ? (user.displayName || 'Anonymous') : (authorName || 'Anonymous'),
+      authorUid: user ? user.uid : 'anonymous',
+      text: text.trim(),
       date: new Date().toLocaleDateString(),
-      replies: []
+      timestamp: Date.now(),
+      parentId,
+      hidden: false
     };
 
-    setComments(prev => updateCommentTree(prev, parentId, (item) => ({
-      ...item,
-      replies: [...item.replies, reply]
-    })));
+    try {
+      await addDoc(collection(db, 'comments'), reply);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'comments');
+    }
   };
 
   const toggleExpand = (id: string) => {
     setExpandedId(prev => prev === id ? null : id);
   };
 
-  // Helper to detect URLs and wrap them in anchor tags
   const renderTextWithLinks = (text: string) => {
     if (!text) return null;
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
@@ -136,22 +231,16 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
     });
   };
 
-  // Styles based on color column
   const getAnnouncementStyle = (color?: string) => {
     const key = color?.toLowerCase().trim() || 'white';
     switch(key) {
-      case 'green':
-        return 'bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-100';
-      case 'yellow':
-        return 'bg-yellow-400/5 hover:bg-yellow-400/10 text-yellow-50';
-      case 'orange':
-        return 'bg-orange-500/5 hover:bg-orange-500/10 text-orange-50';
+      case 'green': return 'bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-100';
+      case 'yellow': return 'bg-yellow-400/5 hover:bg-yellow-400/10 text-yellow-50';
+      case 'orange': return 'bg-orange-500/5 hover:bg-orange-500/10 text-orange-50';
       case 'red':
-      case 'maroon':
-        return 'bg-rose-900/10 hover:bg-rose-900/20 text-rose-50';
+      case 'maroon': return 'bg-rose-900/10 hover:bg-rose-900/20 text-rose-50';
       case 'white':
-      default:
-        return 'bg-slate-800/20 hover:bg-slate-800/40 text-slate-200';
+      default: return 'bg-slate-800/20 hover:bg-slate-800/40 text-slate-200';
     }
   };
 
@@ -273,18 +362,36 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
          {/* New Comment Form */}
          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
            <form onSubmit={handlePostComment} className="space-y-4">
+             {user ? (
+               <div className="flex items-center gap-3 mb-2">
+                 <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold text-white">
+                   {user.displayName?.substring(0, 2).toUpperCase() || 'U'}
+                 </div>
+                 <span className="text-sm font-bold text-slate-200">{user.displayName}</span>
+                 <button type="button" onClick={() => auth.signOut()} className="text-xs text-slate-500 hover:text-slate-300 ml-auto">Sign Out</button>
+               </div>
+             ) : (
+               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+                 <div className="flex-1">
+                   <input 
+                     type="text" 
+                     value={newAuthor}
+                     onChange={(e) => setNewAuthor(e.target.value)}
+                     placeholder="Your Name (or sign in)"
+                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 focus:border-violet-500 outline-none text-sm font-bold"
+                   />
+                 </div>
+                 <button 
+                   type="button"
+                   onClick={handleLogin}
+                   className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 hover:bg-slate-700 rounded-xl font-bold text-sm transition-colors whitespace-nowrap"
+                 >
+                   <LogIn className="w-4 h-4" />
+                   Sign in
+                 </button>
+               </div>
+             )}
              <div>
-               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Name</label>
-               <input 
-                 type="text" 
-                 value={newAuthor}
-                 onChange={(e) => setNewAuthor(e.target.value)}
-                 placeholder="Your name"
-                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 focus:border-violet-500 outline-none text-sm font-bold"
-               />
-             </div>
-             <div>
-               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Message</label>
                <textarea 
                  value={newText}
                  onChange={(e) => setNewText(e.target.value)}
@@ -296,7 +403,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
              <div className="flex justify-end">
                <button 
                  type="submit"
-                 disabled={!newAuthor.trim() || !newText.trim()}
+                 disabled={!newText.trim() || (!user && !newAuthor.trim())}
                  className="px-6 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                >
                  Post Comment
@@ -310,14 +417,41 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
            <div className={comments.length > 2 
              ? "max-h-[600px] overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-600" 
              : "space-y-4"}>
-              {comments.map(comment => (
+              
+              {/* Default Welcome Comment */}
+              <div className="flex gap-3">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold uppercase bg-violet-600 text-white">
+                    W
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="bg-slate-900/50 rounded-2xl p-4 border border-violet-500/30 transition-colors">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-bold text-violet-400">
+                          Welcome
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-400 whitespace-pre-wrap leading-relaxed">
+                      Welcome to the Comments! Choose a fun nickname or sign in to be able to edit or delete your comments.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {comments.filter(c => isAdmin || !c.hidden).map(comment => (
                 <CommentItem 
                   key={comment.id} 
                   comment={comment} 
+                  currentUser={user}
                   isAdmin={isAdmin} 
                   onDelete={handleDelete} 
                   onEdit={handleEdit}
                   onReply={handleReply}
+                  onToggleHide={handleToggleHide}
+                  onLogin={handleLogin}
                   depth={0}
                 />
               ))}
@@ -330,19 +464,25 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
 
 interface CommentItemProps {
   comment: Comment;
+  currentUser: User | null;
   isAdmin: boolean;
   onDelete: (id: string) => void;
   onEdit: (id: string, text: string) => void;
-  onReply: (parentId: string, author: string, text: string) => void;
+  onReply: (parentId: string, text: string, authorName?: string) => void;
+  onToggleHide: (id: string, currentHidden: boolean) => void;
+  onLogin: () => void;
   depth: number;
 }
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, onEdit, onReply, depth }) => {
+const CommentItem: React.FC<CommentItemProps> = ({ comment, currentUser, isAdmin, onDelete, onEdit, onReply, onToggleHide, onLogin, depth }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.text);
   const [isReplying, setIsReplying] = useState(false);
-  const [replyAuthor, setReplyAuthor] = useState('');
   const [replyText, setReplyText] = useState('');
+  const [replyAuthor, setReplyAuthor] = useState('');
+
+  const isOwner = currentUser?.uid === comment.authorUid;
+  const canModify = (isOwner && comment.authorUid !== 'anonymous') || isAdmin;
 
   const handleSaveEdit = () => {
     if (editText.trim()) {
@@ -353,16 +493,17 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
 
   const handleSubmitReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (replyAuthor.trim() && replyText.trim()) {
-      onReply(comment.id, replyAuthor.trim(), replyText.trim());
+    if (!currentUser && !replyAuthor.trim()) return;
+    if (replyText.trim()) {
+      onReply(comment.id, replyText.trim(), replyAuthor.trim());
       setIsReplying(false);
-      setReplyAuthor('');
       setReplyText('');
+      setReplyAuthor('');
     }
   };
 
   return (
-    <div className={`flex gap-3 ${depth > 0 ? 'ml-8 md:ml-12 mt-3' : ''}`}>
+    <div className={`flex gap-3 ${depth > 0 ? 'ml-8 md:ml-12 mt-3' : ''} ${comment.hidden && !isAdmin ? 'hidden' : ''}`}>
       <div className="flex-shrink-0">
         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold uppercase ${comment.author === 'Studio Admin' ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
           {comment.author.substring(0, 2)}
@@ -370,17 +511,23 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
       </div>
       
       <div className="flex-1">
-        <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50 hover:border-slate-800 transition-colors group">
+        <div className={`bg-slate-900/50 rounded-2xl p-4 border ${comment.hidden ? 'border-dashed border-slate-600 opacity-60' : 'border-slate-800/50 hover:border-slate-800'} transition-colors group`}>
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-baseline gap-2">
               <span className={`text-sm font-bold ${comment.author === 'Studio Admin' ? 'text-rose-400' : 'text-slate-200'}`}>
                 {comment.author}
               </span>
               <span className="text-[10px] text-slate-600">{comment.date}</span>
+              {comment.hidden && <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Hidden</span>}
             </div>
             
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               {isAdmin && (
+                <button onClick={() => onToggleHide(comment.id, !!comment.hidden)} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-amber-400 transition-colors" title={comment.hidden ? "Unhide" : "Hide"}>
+                  {comment.hidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                </button>
+              )}
+              {canModify && (
                 <>
                   <button onClick={() => setIsEditing(!isEditing)} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-sky-400 transition-colors">
                     <Edit2 className="w-3.5 h-3.5" />
@@ -425,37 +572,42 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
         {isReplying && (
           <form onSubmit={handleSubmitReply} className="mt-3 bg-slate-900 p-4 rounded-xl border border-slate-800 border-l-4 border-l-violet-500/50">
             <div className="space-y-3">
-              <input 
-                 type="text" 
-                 value={replyAuthor}
-                 onChange={(e) => setReplyAuthor(e.target.value)}
-                 placeholder="Your Name"
-                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-violet-500"
-               />
-               <textarea 
-                 value={replyText}
-                 onChange={(e) => setReplyText(e.target.value)}
-                 placeholder="Write a reply..."
-                 rows={2}
-                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-violet-500 resize-none"
-               />
-               <div className="flex justify-end gap-2">
-                 <button type="button" onClick={() => setIsReplying(false)} className="px-3 py-1.5 text-xs font-bold text-slate-500">Cancel</button>
-                 <button type="submit" disabled={!replyAuthor || !replyText} className="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-500 disabled:opacity-50">Reply</button>
-               </div>
+              {!currentUser && (
+                <input 
+                  type="text" 
+                  value={replyAuthor}
+                  onChange={(e) => setReplyAuthor(e.target.value)}
+                  placeholder="Your Name"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-violet-500"
+                />
+              )}
+              <textarea 
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Write a reply..."
+                rows={2}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-violet-500 resize-none"
+              />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setIsReplying(false)} className="px-3 py-1.5 text-xs font-bold text-slate-500">Cancel</button>
+                <button type="submit" disabled={!replyText.trim() || (!currentUser && !replyAuthor.trim())} className="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-500 disabled:opacity-50">Reply</button>
+              </div>
             </div>
           </form>
         )}
 
         {/* Nested Replies */}
-        {comment.replies.map(reply => (
+        {comment.replies && comment.replies.filter(r => isAdmin || !r.hidden).map(reply => (
           <CommentItem 
             key={reply.id} 
             comment={reply} 
+            currentUser={currentUser}
             isAdmin={isAdmin} 
             onDelete={onDelete} 
             onEdit={onEdit}
             onReply={onReply}
+            onToggleHide={onToggleHide}
+            onLogin={onLogin}
             depth={depth + 1}
           />
         ))}
