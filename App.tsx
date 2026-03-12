@@ -57,37 +57,37 @@ const App: React.FC = () => {
     }
   }, [data]);
 
-  // Load last seen hashes when user logs in
+  const storageKey = currentUser ? `lastSeen_${currentUser.uid}` : 'lastSeen_guest';
+  const isDataLoaded = Object.keys(currentHashes).length > 0;
+
+  // Load last seen hashes when user logs in/out or data loads
   useEffect(() => {
-    if (currentUser && Object.keys(currentHashes).length > 0) {
-      const stored = localStorage.getItem(`lastSeen_${currentUser.uid}`);
-      if (stored) {
-        setLastSeenHashes(prev => Object.keys(prev).length === 0 ? JSON.parse(stored) : prev);
-      } else {
-        localStorage.setItem(`lastSeen_${currentUser.uid}`, JSON.stringify(currentHashes));
-        setLastSeenHashes(currentHashes);
-      }
-    } else if (!currentUser) {
-      setLastSeenHashes({});
+    if (!isDataLoaded) return;
+
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      setLastSeenHashes(JSON.parse(stored));
+    } else {
+      localStorage.setItem(storageKey, JSON.stringify(currentHashes));
+      setLastSeenHashes(currentHashes);
     }
-  }, [currentUser, currentHashes]);
+  }, [storageKey, isDataLoaded]);
 
   // Update last seen hash when tab is clicked
   useEffect(() => {
-    if (currentUser && currentHashes[activeTab]) {
+    if (currentHashes[activeTab]) {
       setLastSeenHashes(prev => {
         if (prev[activeTab] !== currentHashes[activeTab]) {
           const updated = { ...prev, [activeTab]: currentHashes[activeTab] };
-          localStorage.setItem(`lastSeen_${currentUser.uid}`, JSON.stringify(updated));
+          localStorage.setItem(storageKey, JSON.stringify(updated));
           return updated;
         }
         return prev;
       });
     }
-  }, [activeTab, currentHashes, currentUser]);
+  }, [activeTab, currentHashes, storageKey]);
 
   const hasUpdate = (tab: Tab) => {
-    if (!currentUser) return false;
     if (Object.keys(lastSeenHashes).length === 0) return false;
     if (!currentHashes[tab]) return false;
     if (!lastSeenHashes[tab]) return true;
