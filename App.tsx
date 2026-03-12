@@ -8,7 +8,7 @@ import { AnnouncementsView } from './components/AnnouncementsView';
 import { CalculatorView } from './components/CalculatorView';
 import { Library, Users, Loader2, Megaphone, Lock, ShieldAlert, LogOut } from 'lucide-react';
 import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.CLASSES);
@@ -23,6 +23,11 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState(false);
   const clickTimeoutRef = useRef<number | null>(null);
 
+  // Notification States
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [lastSeenHashes, setLastSeenHashes] = useState<Record<string, string>>({});
+  const [currentHashes, setCurrentHashes] = useState<Record<string, string>>({});
+
   useEffect(() => {
     const loadData = async () => {
       const fetchedData = await fetchSheetData();
@@ -32,6 +37,7 @@ const App: React.FC = () => {
     loadData();
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
       if (user && (user.email === 'Lamariow@gmail.com' || user.email === 'lamariow@gmail.com')) {
         setIsAuthenticated(true);
       }
@@ -39,6 +45,54 @@ const App: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  // Compute current hashes when data changes
+  useEffect(() => {
+    if (data) {
+      setCurrentHashes({
+        [Tab.CLASSES]: JSON.stringify(data.classes),
+        [Tab.MEDIA]: JSON.stringify({ videos: data.videos, songs: data.songs }),
+        [Tab.ANNOUNCEMENTS]: JSON.stringify(data.announcements),
+      });
+    }
+  }, [data]);
+
+  // Load last seen hashes when user logs in
+  useEffect(() => {
+    if (currentUser && Object.keys(currentHashes).length > 0) {
+      const stored = localStorage.getItem(`lastSeen_${currentUser.uid}`);
+      if (stored) {
+        setLastSeenHashes(prev => Object.keys(prev).length === 0 ? JSON.parse(stored) : prev);
+      } else {
+        localStorage.setItem(`lastSeen_${currentUser.uid}`, JSON.stringify(currentHashes));
+        setLastSeenHashes(currentHashes);
+      }
+    } else if (!currentUser) {
+      setLastSeenHashes({});
+    }
+  }, [currentUser, currentHashes]);
+
+  // Update last seen hash when tab is clicked
+  useEffect(() => {
+    if (currentUser && currentHashes[activeTab]) {
+      setLastSeenHashes(prev => {
+        if (prev[activeTab] !== currentHashes[activeTab]) {
+          const updated = { ...prev, [activeTab]: currentHashes[activeTab] };
+          localStorage.setItem(`lastSeen_${currentUser.uid}`, JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
+    }
+  }, [activeTab, currentHashes, currentUser]);
+
+  const hasUpdate = (tab: Tab) => {
+    if (!currentUser) return false;
+    if (Object.keys(lastSeenHashes).length === 0) return false;
+    if (!currentHashes[tab]) return false;
+    if (!lastSeenHashes[tab]) return true;
+    return lastSeenHashes[tab] !== currentHashes[tab];
+  };
 
   const navigateTo = (tab: Tab) => {
     // We allow navigation without logging out the admin
@@ -120,30 +174,39 @@ const App: React.FC = () => {
           <nav className="flex items-center gap-0.5 sm:gap-1.5 bg-slate-800 border border-slate-700 p-0.5 sm:p-1 rounded-lg sm:rounded-xl flex-1 sm:flex-none justify-end min-w-0">
             <button
               onClick={() => navigateTo(Tab.CLASSES)}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
+              className={`relative flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
                 activeTab === Tab.CLASSES ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Users className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
               <span>Classes</span>
+              {hasUpdate(Tab.CLASSES) && (
+                <div className="absolute top-0 right-0 -mt-1 -mr-1 w-2.5 h-2.5 bg-rose-500 border-2 border-slate-800 rounded-full"></div>
+              )}
             </button>
             <button
               onClick={() => navigateTo(Tab.MEDIA)}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
+              className={`relative flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
                 activeTab === Tab.MEDIA ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Library className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
               <span>Media</span>
+              {hasUpdate(Tab.MEDIA) && (
+                <div className="absolute top-0 right-0 -mt-1 -mr-1 w-2.5 h-2.5 bg-rose-500 border-2 border-slate-800 rounded-full"></div>
+              )}
             </button>
             <button
               onClick={() => navigateTo(Tab.ANNOUNCEMENTS)}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
+              className={`relative flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
                 activeTab === Tab.ANNOUNCEMENTS ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Megaphone className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
               <span>News</span>
+              {hasUpdate(Tab.ANNOUNCEMENTS) && (
+                <div className="absolute top-0 right-0 -mt-1 -mr-1 w-2.5 h-2.5 bg-rose-500 border-2 border-slate-800 rounded-full"></div>
+              )}
             </button>
             {isAuthenticated && (
               <>
