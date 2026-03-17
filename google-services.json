@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1079908678852",
+    "project_id": "gen-lang-client-0566172369",
+    "storage_bucket": "gen-lang-client-0566172369.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1079908678852:android:6616eaf3f9f8857d311d91",
+        "android_client_info": {
+          "package_name": "com.danceclasscompanion.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1079908678852-mhcpkcgosfiks8ibj46jbjkog8dhcpdp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpS4Co5N33SJDq8v5jF-9--OQCPJx2ODg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1079908678852-8ahhjbcnfna9pb8hsejpo20f51etp5a1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
