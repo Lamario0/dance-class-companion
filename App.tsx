@@ -306,6 +306,9 @@ const App: React.FC = () => {
       <footer className="border-t border-slate-800 bg-slate-900 py-8 mt-auto">
         <div className="max-w-5xl mx-auto px-4 text-center">
           <p className="text-slate-500 text-sm">© {new Date().getFullYear()} Dance Class Companion. Master the Basics. Dance Your Story.</p>
+          <p className="text-slate-500 text-xs mt-4">
+            Download and install apk: <a href="https://apiv3.webinto.app/download/1733" className="text-violet-400 hover:text-violet-300 underline transition-colors" target="_blank" rel="noopener noreferrer">https://apiv3.webinto.app/download/1733</a>
+          </p>
           <p className="text-slate-600 text-xs mt-2">Powered by Gemini AI & Google Sheets</p>
         </div>
       </footer>
