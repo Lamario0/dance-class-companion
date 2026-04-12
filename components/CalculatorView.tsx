@@ -15,6 +15,7 @@ export const CalculatorView: React.FC = () => {
   // Counters
   const [lessonCount, setLessonCount] = useState(0);
   const [danceOnlyCount, setDanceOnlyCount] = useState(0);
+  const [beginnerCount, setBeginnerCount] = useState(0);
   const [totalManualAdjust, setTotalManualAdjust] = useState(0);
   const [totalCompedCount, setTotalCompedCount] = useState(0);
   
@@ -43,6 +44,7 @@ export const CalculatorView: React.FC = () => {
       if (saved) {
         setLessonCount(saved.lessonCount ?? 0);
         setDanceOnlyCount(saved.danceOnlyCount ?? 0);
+        setBeginnerCount(saved.beginnerCount ?? 0);
         setTotalManualAdjust(saved.totalManualAdjust ?? 0);
         setTotalCompedCount(saved.totalCompedCount ?? 0);
         setSplitPersons(saved.splitPersons ?? 1);
@@ -67,6 +69,7 @@ export const CalculatorView: React.FC = () => {
       performSync({
         lessonCount,
         danceOnlyCount,
+        beginnerCount,
         totalManualAdjust,
         totalCompedCount,
         splitPersons,
@@ -77,11 +80,11 @@ export const CalculatorView: React.FC = () => {
       });
     }, 5000);
     return () => clearTimeout(timer);
-  }, [lessonCount, danceOnlyCount, totalManualAdjust, totalCompedCount, splitPersons, customAmount, selectedDate, priceLesson, priceDance, performSync]);
+  }, [lessonCount, danceOnlyCount, beginnerCount, totalManualAdjust, totalCompedCount, splitPersons, customAmount, selectedDate, priceLesson, priceDance, performSync]);
 
   const totalInAttendance = useMemo(() => 
-    lessonCount + danceOnlyCount + totalCompedCount + totalManualAdjust
-  , [lessonCount, danceOnlyCount, totalCompedCount, totalManualAdjust]);
+    lessonCount + danceOnlyCount + beginnerCount + totalCompedCount + totalManualAdjust
+  , [lessonCount, danceOnlyCount, beginnerCount, totalCompedCount, totalManualAdjust]);
 
   const totalRevenue = useMemo(() => 
     (lessonCount * priceLesson) + (danceOnlyCount * priceDance) + (Number(customAmount) || 0)
@@ -98,6 +101,7 @@ export const CalculatorView: React.FC = () => {
     // 1. Reset Counters
     setLessonCount(0);
     setDanceOnlyCount(0);
+    setBeginnerCount(0);
     setTotalManualAdjust(0);
     setTotalCompedCount(0);
     setCustomAmount(0);
@@ -111,6 +115,7 @@ export const CalculatorView: React.FC = () => {
       syncCurrentSessionState({
         lessonCount: 0,
         danceOnlyCount: 0,
+        beginnerCount: 0,
         totalManualAdjust: 0,
         totalCompedCount: 0,
         splitPersons, // Keep current
@@ -161,6 +166,7 @@ export const CalculatorView: React.FC = () => {
       totalInAttendance,
       lessonAndDance: lessonCount,
       danceOnly: danceOnlyCount,
+      beginnerCount: beginnerCount,
       totalComped: totalCompedCount,
       totalRevenue: totalRevenue,
       perPersonSplit: perPersonSplit
@@ -245,6 +251,12 @@ export const CalculatorView: React.FC = () => {
                 price={priceDance} 
                 onPriceChange={setPriceDance}
                 color="sky"
+              />
+              <Counter 
+                label="Beginner" 
+                count={beginnerCount} 
+                onChange={setBeginnerCount} 
+                color="emerald"
               />
             </div>
 
@@ -395,30 +407,33 @@ interface CounterProps {
   label: string;
   count: number;
   onChange: (val: number) => void;
-  price: number;
-  onPriceChange: (val: number) => void;
-  color: 'violet' | 'sky';
+  price?: number;
+  onPriceChange?: (val: number) => void;
+  color: 'violet' | 'sky' | 'emerald';
 }
 
 const Counter: React.FC<CounterProps> = ({ label, count, onChange, price, onPriceChange, color }) => {
   const colorMap = {
     violet: 'text-violet-400 bg-violet-500/10 border-violet-500/20 hover:bg-violet-500 hover:text-white',
     sky: 'text-sky-400 bg-sky-500/10 border-sky-500/20 hover:bg-sky-500 hover:text-white',
+    emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500 hover:text-white',
   };
 
   return (
     <div className="space-y-3 sm:space-y-4">
       <div className="flex justify-between items-center px-1">
         <span className="text-[10px] sm:text-sm font-black text-slate-300 uppercase tracking-wider">{label}</span>
-        <div className="flex items-center gap-1.5 bg-slate-950 px-2 sm:px-3 py-1 rounded-lg sm:rounded-xl border border-slate-800">
-           <span className="text-[8px] sm:text-[10px] font-black text-slate-600 uppercase tracking-tighter">$</span>
-           <input 
-            type="number" 
-            value={price}
-            onChange={(e) => onPriceChange(Number(e.target.value))}
-            className="w-8 sm:w-10 bg-transparent text-slate-200 text-xs sm:text-sm text-center outline-none font-black"
-           />
-        </div>
+        {price !== undefined && onPriceChange && (
+          <div className="flex items-center gap-1.5 bg-slate-950 px-2 sm:px-3 py-1 rounded-lg sm:rounded-xl border border-slate-800">
+             <span className="text-[8px] sm:text-[10px] font-black text-slate-600 uppercase tracking-tighter">$</span>
+             <input 
+              type="number" 
+              value={price}
+              onChange={(e) => onPriceChange(Number(e.target.value))}
+              className="w-8 sm:w-10 bg-transparent text-slate-200 text-xs sm:text-sm text-center outline-none font-black"
+             />
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-3 sm:gap-4">
         <button 

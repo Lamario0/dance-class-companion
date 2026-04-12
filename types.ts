@@ -53,6 +53,7 @@ export interface AttendanceRecord {
   totalInAttendance: number;
   lessonAndDance: number;
   danceOnly: number;
+  beginnerCount?: number;
   totalComped: number;
   totalRevenue: number;
   perPersonSplit: number;
