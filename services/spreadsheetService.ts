@@ -1,5 +1,5 @@
 
-import { AttendanceRecord, CompedRecord } from '../types';
+import { AttendanceRecord, CompedRecord, WaiverRecord } from '../types';
 
 /**
  * 🟡 CONFIGURATION REQUIRED 🟡
@@ -45,6 +45,11 @@ export const commitAttendance = async (record: AttendanceRecord): Promise<boolea
 
 export const commitCompedEntry = async (record: CompedRecord): Promise<boolean> => {
   const result = await callScript({ action: 'commitComped', ...record });
+  return !result.error;
+};
+
+export const commitWaiver = async (record: WaiverRecord): Promise<boolean> => {
+  const result = await callScript({ action: 'commitWaiver', ...record });
   return !result.error;
 };
 

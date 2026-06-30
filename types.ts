@@ -64,3 +64,13 @@ export interface CompedRecord {
   name: string;
   notes: string;
 }
+
+export interface WaiverRecord {
+  date: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  newsletterOptIn: boolean;
+  acceptedWaiver: boolean;
+}
+

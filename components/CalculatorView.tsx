@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Plus, Minus, Save, Users, DollarSign, Calculator, UserPlus, RefreshCcw, CheckCircle2, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
-import { commitAttendance, commitCompedEntry, fetchCurrentSessionState, syncCurrentSessionState, GOOGLE_SCRIPT_URL } from '../services/spreadsheetService';
+import { Plus, Minus, Save, Users, DollarSign, Calculator, UserPlus, RefreshCcw, CheckCircle2, Calendar as CalendarIcon, AlertCircle, FileText, X } from 'lucide-react';
+import { commitAttendance, commitCompedEntry, commitWaiver, fetchCurrentSessionState, syncCurrentSessionState, GOOGLE_SCRIPT_URL } from '../services/spreadsheetService';
 
 export const CalculatorView: React.FC = () => {
   // Check if spreadsheet is configured
@@ -35,6 +35,22 @@ export const CalculatorView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('Changes Saved!');
+
+  // Waiver Modal States
+  const [showWaiverModal, setShowWaiverModal] = useState(false);
+  const [waiverDate, setWaiverDate] = useState(selectedDate);
+  const [waiverFirstName, setWaiverFirstName] = useState('');
+  const [waiverLastName, setWaiverLastName] = useState('');
+  const [waiverEmail, setWaiverEmail] = useState('');
+  const [waiverNewsletterOptIn, setWaiverNewsletterOptIn] = useState(false);
+  const [waiverAccepted, setWaiverAccepted] = useState(false);
+  const [isWaiverSaving, setIsWaiverSaving] = useState(false);
+
+  useEffect(() => {
+    if (showWaiverModal) {
+      setWaiverDate(selectedDate);
+    }
+  }, [selectedDate, showWaiverModal]);
 
   // Persistence: Fetch on Mount
   useEffect(() => {
@@ -181,6 +197,40 @@ export const CalculatorView: React.FC = () => {
     }
   };
 
+  const handleWaiverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waiverFirstName.trim() || !waiverLastName.trim() || !waiverEmail.trim() || !waiverAccepted) return;
+
+    setIsWaiverSaving(true);
+    const record = {
+      date: waiverDate,
+      firstName: waiverFirstName.trim(),
+      lastName: waiverLastName.trim(),
+      email: waiverEmail.trim(),
+      newsletterOptIn: waiverNewsletterOptIn,
+      acceptedWaiver: waiverAccepted
+    };
+
+    const success = await commitWaiver(record);
+    setIsWaiverSaving(false);
+    if (success || !isSpreadsheetConfigured) {
+      setSuccessMessage('Waiver Saved Successfully!');
+      setShowSuccess(true);
+      setShowWaiverModal(false);
+      
+      // Reset form fields
+      setWaiverFirstName('');
+      setWaiverLastName('');
+      setWaiverEmail('');
+      setWaiverNewsletterOptIn(false);
+      setWaiverAccepted(false);
+      
+      setTimeout(() => setShowSuccess(false), 3000);
+    } else {
+      alert("Error saving waiver. Please verify your spreadsheet connection.");
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -217,14 +267,25 @@ export const CalculatorView: React.FC = () => {
           </div>
         </div>
         
-        <button 
-          type="button"
-          onClick={handleClearAll}
-          className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all text-[10px] sm:text-sm font-black shadow-lg flex-shrink-0 active:scale-95"
-        >
-          <RefreshCcw className="w-3.5 h-3.5 shrink-0" />
-          <span>Clear All</span>
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button 
+            type="button"
+            onClick={() => setShowWaiverModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-xl border border-emerald-500/20 transition-all text-[10px] sm:text-sm font-black shadow-lg active:scale-95"
+          >
+            <FileText className="w-3.5 h-3.5 shrink-0" />
+            <span>Collect Waiver</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={handleClearAll}
+            className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all text-[10px] sm:text-sm font-black shadow-lg active:scale-95"
+          >
+            <RefreshCcw className="w-3.5 h-3.5 shrink-0" />
+            <span>Clear All</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
@@ -397,6 +458,130 @@ export const CalculatorView: React.FC = () => {
             <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <span className="font-black text-sm sm:text-lg">{successMessage}</span>
+        </div>
+      )}
+
+      {/* Waiver Collection Modal */}
+      {showWaiverModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] shadow-2xl max-w-lg w-full p-6 sm:p-10 animate-in zoom-in-95 duration-200 relative my-8">
+            <button 
+              onClick={() => setShowWaiverModal(false)}
+              className="absolute top-6 right-6 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            
+            <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-emerald-400 border border-emerald-500/20">
+              <FileText className="w-8 h-8" />
+            </div>
+            
+            <h2 className="text-2xl font-black text-white text-center mb-2">Liability Waiver Form</h2>
+            <p className="text-slate-500 text-sm text-center mb-8">Please fill in your details to accept our waiver agreement.</p>
+            
+            <form onSubmit={handleWaiverSubmit} className="space-y-5 text-left">
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Date</label>
+                <input 
+                  type="date" 
+                  required
+                  value={waiverDate}
+                  onChange={(e) => setWaiverDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none [color-scheme:dark]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">First Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="John"
+                    value={waiverFirstName}
+                    onChange={(e) => setWaiverFirstName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none placeholder:text-slate-700 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Last Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Doe"
+                    value={waiverLastName}
+                    onChange={(e) => setWaiverLastName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none placeholder:text-slate-700 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Email Address</label>
+                <input 
+                  type="email" 
+                  required
+                  placeholder="john.doe@example.com"
+                  value={waiverEmail}
+                  onChange={(e) => setWaiverEmail(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none placeholder:text-slate-700 font-bold"
+                />
+              </div>
+
+              {/* Terms text box */}
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 h-28 overflow-y-auto font-medium leading-relaxed">
+                <p className="font-bold mb-2 text-slate-300">DANCE LIABILITY WAIVER & RELEASE AGREEMENT</p>
+                <p className="mb-2">By checking "I Accept" below, I hereby assume all risks associated with my participation in any dance classes, social dancing, or related events hosted by Dance Class Companion.</p>
+                <p className="mb-2">I release and discharge the organizers, instructors, venue owners, and affiliates from any and all liability, claims, or demands for personal injury, sickness, or death, as well as property damage and expenses, of any nature, occurring while participating in these activities.</p>
+                <p>I certify that I am physically fit to participate and do so voluntarily at my own risk.</p>
+              </div>
+
+              {/* Newsletter checkbox */}
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input 
+                  type="checkbox"
+                  checked={waiverNewsletterOptIn}
+                  onChange={(e) => setWaiverNewsletterOptIn(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-slate-800 text-emerald-600 focus:ring-emerald-500 bg-slate-950 cursor-pointer"
+                />
+                <span className="text-xs text-slate-400 font-medium leading-tight group-hover:text-slate-300 transition-colors">
+                  Keep me updated with newsletters & upcoming events. <span className="block text-slate-500 text-[10px] mt-0.5">We value your privacy. Your data will never be shared or sold.</span>
+                </span>
+              </label>
+
+              {/* I Accept checkbox */}
+              <label className="flex items-start gap-3 cursor-pointer group pt-1">
+                <input 
+                  type="checkbox"
+                  required
+                  checked={waiverAccepted}
+                  onChange={(e) => setWaiverAccepted(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-slate-800 text-emerald-600 focus:ring-emerald-500 bg-slate-950 cursor-pointer"
+                />
+                <span className="text-xs text-slate-400 font-bold leading-tight group-hover:text-slate-300 transition-colors">
+                  I Accept the terms of the liability waiver agreement. <span className="text-rose-500">*</span>
+                </span>
+              </label>
+
+              <div className="flex gap-4 pt-4 border-t border-slate-800">
+                <button 
+                  type="button" 
+                  onClick={() => setShowWaiverModal(false)}
+                  className="flex-1 py-4 bg-slate-800 text-slate-400 font-bold rounded-2xl hover:bg-slate-700 transition-colors text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isWaiverSaving}
+                  className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-emerald-900/20 text-sm flex items-center justify-center gap-2"
+                >
+                  {isWaiverSaving ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>Save Waiver</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
