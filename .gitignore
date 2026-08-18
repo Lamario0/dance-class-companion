@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 *.env
+
+firebase-applet-config.json
+.env
+.env.local
+.env.*.local

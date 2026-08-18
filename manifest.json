@@ -1,0 +1,20 @@
+{
+  "background_color": "#020617",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Dance Class Companion",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "danceclasscompanion",
+  "start_url": "/",
+  "theme_color": "#9333ea",
+  "id": "DCC",
+  "description": "Dance Class Companion is your ultimate learning companion! Receive, not only class updates and notes, but also video recommendations, tutorials, music suggestions, announcements, comments and more.",
+  "categories": [
+    "education",
+    "fitness",
+    "lifestyle",
+    "productivity",
+    "social"
+  ]
+}
