@@ -19,6 +19,7 @@ const App: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginError, setLoginError] = useState(false);
+  const [loginPending, setLoginPending] = useState(false);
   const clickTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -58,17 +59,26 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === 'bluebird') {
+    setLoginPending(true);
+    setLoginError(false);
+    try {
+      const response = await fetch('/api/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: passwordInput }),
+      });
+      if (!response.ok) throw new Error('Incorrect password');
       setIsAuthenticated(true);
       setShowPasswordPrompt(false);
       setActiveTab(Tab.CALCULATOR);
-      setLoginError(false);
       setPasswordInput('');
-    } else {
+    } catch {
       setLoginError(true);
       setPasswordInput('');
+    } finally {
+      setLoginPending(false);
     }
   };
 
@@ -185,9 +195,10 @@ const App: React.FC = () => {
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 py-4 bg-violet-600 text-white font-bold rounded-2xl hover:bg-violet-500 transition-all shadow-lg shadow-violet-900/20"
+                  disabled={loginPending}
+                  className="flex-1 py-4 bg-violet-600 text-white font-bold rounded-2xl hover:bg-violet-500 transition-all shadow-lg shadow-violet-900/20 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Unlock
+                  {loginPending ? 'Checking...' : 'Unlock'}
                 </button>
               </div>
             </form>

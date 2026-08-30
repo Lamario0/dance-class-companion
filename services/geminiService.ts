@@ -1,8 +1,22 @@
 
-import { GoogleGenAI } from "@google/genai";
+// Client-side wrapper for the Gemini features. All calls go through the
+// /api/ai Netlify function (netlify/functions/gemini.mts) — the Gemini API
+// key stays server-side and is never bundled into the client.
 
-// Initialize the client strictly using process.env.API_KEY as per guidelines
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const callAi = async (payload: Record<string, unknown>): Promise<string> => {
+  const response = await fetch('/api/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`AI request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return typeof data.text === 'string' ? data.text : '';
+};
 
 /**
  * Explains a dance pattern or term using Gemini.
@@ -11,28 +25,11 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
  */
 export const explainPattern = async (patternName: string, className: string): Promise<string> => {
   try {
-    const prompt = `
-      You are an expert dance instructor. 
-      Briefly explain the dance term, pattern, or concept "${patternName}" in the context of "${className}".
-      Focus on the key mechanical steps or feeling. Keep it under 50 words.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        thinkingConfig: { thinkingBudget: 0 } // Low latency preferred for UI tooltips
-      }
-    });
-
-    if (response.text) {
-        return response.text;
-    }
-    return "Could not generate an explanation at this time.";
-
+    const text = await callAi({ action: 'explainPattern', patternName, className });
+    return text || "Could not generate an explanation at this time.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "AI Assistant is currently unavailable. Please check your API key.";
+    return "AI Assistant is currently unavailable. Please try again later.";
   }
 };
 
@@ -43,24 +40,8 @@ export const explainPattern = async (patternName: string, className: string): Pr
  */
 export const parseVoiceSearch = async (audioBase64: string, mimeType: string): Promise<string> => {
   try {
-    const prompt = "Listen to this audio. The user is searching for a song, artist, or genre in a dance music library. Extract the text search query. Return ONLY the search terms as text. If no search term is detected, return empty string.";
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: audioBase64
-            }
-          },
-          { text: prompt }
-        ]
-      }
-    });
-
-    return response.text?.trim() || "";
+    const text = await callAi({ action: 'parseVoiceSearch', audioBase64, mimeType });
+    return text.trim();
   } catch (error) {
     console.error("Gemini Voice Search Error:", error);
     return "";
