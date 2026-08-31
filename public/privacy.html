@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Dance Class Companion</title>
+<meta name="description" content="Privacy Policy for Dance Class Companion, a student portal for West Coast Swing class content, attendance, and practice resources.">
+<meta name="robots" content="noindex">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #020617;
+    color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 20px 96px; }
+  header.page { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .badge {
+    width: 40px; height: 40px; border-radius: 12px; background: #fff;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  }
+  .badge svg { width: 26px; height: 26px; }
+  h1 { font-size: 1.6rem; margin: 0; color: #f8fafc; }
+  .updated { color: #94a3b8; font-size: 0.85rem; margin: 4px 0 40px; }
+  h2 { font-size: 1.1rem; color: #f1f5f9; margin-top: 2.4em; margin-bottom: 0.6em; border-top: 1px solid #1e293b; padding-top: 1.6em; }
+  p, li { color: #cbd5e1; font-size: 0.97rem; }
+  ul { padding-left: 1.3em; }
+  a { color: #e9b8ff; }
+  a:hover { color: #f0d3ff; }
+  .back { display: inline-block; margin-top: 48px; color: #94a3b8; text-decoration: none; font-size: 0.9rem; }
+  .back:hover { color: #cbd5e1; }
+  table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #1e293b; color: #cbd5e1; vertical-align: top; }
+  th { color: #f1f5f9; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="page">
+      <div class="badge">
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#d946ef" />
+              <stop offset="100%" stop-color="#701a75" />
+            </linearGradient>
+          </defs>
+          <path d="M45,32 c1,0 2,-1 2,-2 c0,-1 -1,-2 -2,-2 c-2,0 -4,2 -4,5 c0,2 1,3 3,3 c2,0 3,-1 4,-3 c0,-2 -2,-4 -4,-4 M50,45 c2,-5 6,-8 10,-8 c4,0 7,4 7,8 c0,6 -10,12 -15,15 c-5,-3 -15,-9 -15,-15 c0,-4 3,-8 7,-8 c4,0 8,3 10,8 M38,35 c-2,-2 -5,-3 -8,-2 c-3,1 -5,4 -5,7 c0,3 2,5 5,6 c3,1 6,-1 8,-4 c2,-3 1,-7 -1,-9 M62,35 c2,-2 5,-3 8,-2 c3,1 5,4 5,7 c0,3 -2,5 -5,6 c-3,1 -6,-1 -8,-4 c-2,-3 -1,-7 1,-9 M50,55 c0,0 -5,10 -10,15 c-5,5 -10,5 -10,5 M50,55 c0,0 5,10 10,15 c5,5 10,5 10,5" fill="url(#g)"/>
+        </svg>
+      </div>
+      <h1>Privacy Policy</h1>
+    </header>
+    <p class="updated">Dance Class Companion · Last updated August 31, 2026</p>
+
+    <p>This Privacy Policy explains what information Dance Class Companion ("the App", "we", "us") collects when you use the app or website, how it's used, and the choices you have. Dance Class Companion is a student portal for West Coast Swing class content — weekly pattern recaps, video tutorials, practice music, and class announcements.</p>
+
+    <h2>Information we collect</h2>
+    <table>
+      <tr><th>What</th><th>When</th><th>Why</th></tr>
+      <tr><td>Email address</td><td>If you sign in (Firebase Authentication)</td><td>To identify your account for features that require sign-in</td></tr>
+      <tr><td>Name, email, waiver acceptance</td><td>If you submit a class waiver</td><td>To record participation waivers for the class program, via a Google Sheet the studio maintains</td></tr>
+      <tr><td>Attendance records</td><td>Recorded by class staff</td><td>To track class attendance and comped entries, via the same Google Sheet</td></tr>
+      <tr><td>Voice input (if used)</td><td>Only if you use the voice-search feature</td><td>Converted to text and sent to Google's Gemini API to interpret your search — not stored by us afterward</td></tr>
+    </table>
+
+    <p>We do not collect payment information, government ID numbers, or precise real-time location. We do not run advertising and we do not sell any information to third parties.</p>
+
+    <h2>How your information is used</h2>
+    <ul>
+      <li>To operate core features: showing class content, tracking attendance/comped entries, and recording waivers.</li>
+      <li>To power the optional AI features (pattern explanations and voice search) via Google's Gemini API. Requests are proxied through our server so your device never sends an API key directly to Google.</li>
+      <li>We do not use your information for advertising or profiling.</li>
+    </ul>
+
+    <h2>Where your information is stored</h2>
+    <p>Class content (schedules, videos, playlists) is sourced from a Google Sheet maintained by the studio. Attendance, comped-entry, and waiver submissions are written to that same spreadsheet via a Google Apps Script. Sign-in, when used, is handled by Firebase Authentication (Google Cloud). Data is stored on Google's infrastructure and is not shared with any other third party.</p>
+
+    <h2>Your choices</h2>
+    <ul>
+      <li>You can use most of the app — viewing class content, videos, and playlists — without signing in or providing any personal information.</li>
+      <li>If you'd like your waiver or attendance record corrected or removed, contact us using the details below.</li>
+    </ul>
+
+    <h2>Children's privacy</h2>
+    <p>Dance Class Companion is intended for a general audience and is not directed at children under 13. We do not knowingly collect personal information from children under 13.</p>
+
+    <h2>Changes to this policy</h2>
+    <p>If this policy changes, we'll update the "Last updated" date above. Continued use of the app after a change means you accept the updated policy.</p>
+
+    <h2>Contact us</h2>
+    <p>Questions about this policy or your data? Contact us at <a href="mailto:lamariow@gmail.com">lamariow@gmail.com</a>.</p>
+
+    <a class="back" href="/">← Back to Dance Class Companion</a>
+  </div>
+</body>
+</html>

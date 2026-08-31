@@ -240,6 +240,7 @@ const App: React.FC = () => {
         <div className="max-w-5xl mx-auto px-4 text-center">
           <p className="text-slate-500 text-sm">© {new Date().getFullYear()} Dance Class Companion. Master the Basics. Dance Your Story.</p>
           <p className="text-slate-600 text-xs mt-2">Powered by Gemini AI & Google Sheets</p>
+          <p className="text-slate-600 text-xs mt-2"><a href="/privacy.html" className="hover:text-slate-400 underline">Privacy Policy</a></p>
         </div>
       </footer>
     </div>
