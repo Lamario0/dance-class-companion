@@ -1,0 +1,58 @@
+workflows:
+  ios-simulator-build:
+    name: iOS Simulator Build (no signing)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      node: 20
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Build web app
+        script: npm run build
+      - name: Sync Capacitor iOS
+        script: npx cap sync ios
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios/App && pod install
+      - name: Build for iOS Simulator (unsigned)
+        script: |
+          xcodebuild build \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+    artifacts:
+      - build/ios/**/*.app
+
+  # Add once the Apple Developer account ($99/yr) is active:
+  # ios-testflight:
+  #   name: iOS TestFlight Release
+  #   instance_type: mac_mini_m2
+  #   environment:
+  #     node: 20
+  #     xcode: latest
+  #     cocoapods: default
+  #     ios_signing:
+  #       distribution_type: app_store
+  #       bundle_identifier: com.danceclasscompanion.app
+  #     app_store_connect:
+  #       api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+  #       key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+  #       issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+  #   scripts:
+  #     - npm ci
+  #     - npm run build
+  #     - npx cap sync ios
+  #     - cd ios/App && pod install
+  #     - xcode-project use-profiles
+  #     - xcode-project build-ipa --workspace ios/App/App.xcworkspace --scheme App
+  #   artifacts:
+  #     - build/ios/ipa/*.ipa
+  #   publishing:
+  #     app_store_connect:
+  #       auth: integration
+  #       submit_to_testflight: true

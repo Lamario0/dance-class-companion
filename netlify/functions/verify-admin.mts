@@ -5,8 +5,6 @@
 import type { Context } from '@netlify/functions';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-declare const Netlify: { env: { get(key: string): string | undefined } };
-
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -30,8 +28,8 @@ export default async (req: Request, _context: Context) => {
     return json({ error: 'Method not allowed.' }, 405);
   }
 
-  const adminPassword = Netlify.env.get('ADMIN_PASSWORD');
-  const sessionSecret = Netlify.env.get('ADMIN_SESSION_SECRET');
+  const adminPassword = process.env['ADMIN_PASSWORD'];
+  const sessionSecret = process.env['ADMIN_SESSION_SECRET'];
   if (!adminPassword || !sessionSecret) {
     console.error('ADMIN_PASSWORD or ADMIN_SESSION_SECRET is not configured.');
     return json({ error: 'Admin login is not configured.' }, 500);

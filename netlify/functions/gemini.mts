@@ -4,8 +4,6 @@
 // which is only available to serverless functions, not the client build.
 import type { Context } from '@netlify/functions';
 
-declare const Netlify: { env: { get(key: string): string | undefined } };
-
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -17,7 +15,7 @@ export default async (req: Request, _context: Context) => {
     return json({ error: 'Method not allowed.' }, 405);
   }
 
-  const apiKey = Netlify.env.get('GEMINI_API_KEY');
+  const apiKey = process.env['GEMINI_API_KEY'];
   if (!apiKey) {
     console.error('GEMINI_API_KEY is not configured.');
     return json({ error: 'AI Assistant is not configured.' }, 500);
