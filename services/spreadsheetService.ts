@@ -6,7 +6,7 @@ import { AttendanceRecord, CompedRecord, WaiverRecord } from '../types';
  * Paste your Google Apps Script "Web App URL" below.
  * It should look like: https://script.google.com/macros/s/AKfycb.../exec
  */
-export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxxTj344yZ1ch1YLWvUdWtNsagsRd8qkp4kGf3jiXWBUmkke0yZCEUer5NnRXOY8zm_/exec';
+export const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbycssmld0T-I0K2riAHWBce0M9_avn_iRQwUTrYrKSSYRzpO4MYHohpNkM9jt4lsxQ/exec';
 
 const isConfigured = () => !GOOGLE_SCRIPT_URL.includes('REPLACE_WITH_YOUR_ID');
 
