@@ -1,6 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Announcement } from '../types';
-import { Megaphone, Calendar, Bell, MessageSquare, Trash2, Edit2, Save, X, Reply, ChevronDown, ChevronUp } from 'lucide-react';
+import { MessageCircle, Trash2, Edit2, Save, X, Reply, ChevronDown, Send, CalendarDays } from 'lucide-react';
+import { Segmented } from './ui/Segmented';
+import { EmptyState } from './ui/Doodles';
+import { useToast } from './ui/Toast';
+
+// UI-only: remember the chat name locally after the first post.
+const NAME_KEY = 'dcc_chat_name';
+const readSavedName = () => {
+  try { return localStorage.getItem(NAME_KEY) || ''; } catch { return ''; }
+};
+const saveName = (name: string) => {
+  try { localStorage.setItem(NAME_KEY, name); } catch { /* ignore */ }
+};
+
+// UI-only: static colour lookups for the event-type dots (Tailwind needs literal class names).
+const DOT: Record<string, string> = {
+  green: 'bg-emerald-400', yellow: 'bg-yellow-400', orange: 'bg-orange-400', red: 'bg-rose-500', maroon: 'bg-rose-500', white: 'bg-slate-300',
+};
+const BADGE: Record<string, string> = {
+  green: 'text-emerald-300', yellow: 'text-yellow-300', orange: 'text-orange-300', red: 'text-rose-300', maroon: 'text-rose-300', white: 'text-text-mid',
+};
+const colorKey = (c?: string) => {
+  const k = c?.toLowerCase().trim() || 'white';
+  return k in DOT ? k : 'white';
+};
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "10/22/2026" → { mon: "Oct", day: "22" }; anything else is shown as-is. */
+const splitDate = (d: string) => {
+  const m = d.trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?$/);
+  if (m && +m[1] >= 1 && +m[1] <= 12) return { mon: MONTHS[+m[1] - 1], day: String(+m[2]) };
+  return null;
+};
+
 
 interface AnnouncementsViewProps {
   announcements: Announcement[];
@@ -28,9 +60,15 @@ const LEGEND = [
 
 export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announcements, isAdmin = false }) => {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [newAuthor, setNewAuthor] = useState('');
+  const [newAuthor, setNewAuthor] = useState(readSavedName);
   const [newText, setNewText] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // UI-only state
+  const [view, setView] = useState<'updates' | 'chat'>('updates');
+  const [savedName, setSavedName] = useState(readSavedName);
+  const [editingName, setEditingName] = useState(false);
+  const toast = useToast();
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   // Load comments from local storage
   useEffect(() => {
@@ -127,7 +165,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
       if (part.match(urlRegex)) {
         const href = part.startsWith('www.') ? `https://${part}` : part;
         return (
-          <a key={index} href={href} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline break-all relative z-20">
+          <a key={index} href={href} target="_blank" rel="noopener noreferrer" className="text-brand-soft underline underline-offset-2 break-all relative z-20" onClick={(e) => e.stopPropagation()}>
             {part}
           </a>
         );
@@ -136,193 +174,192 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
     });
   };
 
-  // Styles based on color column
-  const getAnnouncementStyle = (color?: string) => {
-    const key = color?.toLowerCase().trim() || 'white';
-    switch(key) {
-      case 'green':
-        return 'bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-100';
-      case 'yellow':
-        return 'bg-yellow-400/5 hover:bg-yellow-400/10 text-yellow-50';
-      case 'orange':
-        return 'bg-orange-500/5 hover:bg-orange-500/10 text-orange-50';
-      case 'red':
-      case 'maroon':
-        return 'bg-rose-900/10 hover:bg-rose-900/20 text-rose-50';
-      case 'white':
-      default:
-        return 'bg-slate-800/20 hover:bg-slate-800/40 text-slate-200';
-    }
+  const onComposerSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAuthor.trim() || !newText.trim()) return;
+    const t = toast.show('Posting…', 'loading');
+    saveName(newAuthor.trim());
+    setSavedName(newAuthor.trim());
+    setEditingName(false);
+    handlePostComment(e);
+    window.setTimeout(() => t.update('Posted!', 'success'), 450);
   };
 
-  const getBadgeColor = (color?: string) => {
-    const key = color?.toLowerCase().trim() || 'white';
-    switch(key) {
-      case 'green': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-      case 'yellow': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'orange': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
-      case 'red':
-      case 'maroon': return 'bg-rose-900/30 text-rose-400 border-rose-800/40';
-      default: return 'bg-slate-700/50 text-slate-300 border-slate-600/30';
-    }
-  };
+  const askName = !savedName || editingName;
 
   return (
-    <div className="max-w-3xl mx-auto pb-20 space-y-12">
-      {/* Official Announcements */}
-      <div className="bg-slate-900 rounded-3xl shadow-sm border border-slate-800 overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-slate-800 flex flex-col md:flex-row md:items-start justify-between gap-6 bg-gradient-to-b from-slate-900 to-slate-800/50">
-           <div className="flex items-center gap-3">
-             <div className="p-3 bg-rose-500/10 text-rose-400 rounded-xl ring-1 ring-rose-500/20">
-               <Megaphone className="w-6 h-6" />
-             </div>
-             <div>
-               <h2 className="text-2xl font-bold text-white">Announcements</h2>
-               <p className="text-slate-400 text-sm">Upcoming events & updates</p>
-             </div>
-           </div>
-           
-           {/* Legend - Top Right Box */}
-           <div className="bg-slate-950/50 rounded-xl p-4 border border-slate-800">
-              <span className="block text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-wider border-b border-slate-800/50 pb-2">Event Key</span>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-                {LEGEND.map((item) => (
-                  <div key={item.key} className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${item.colorClass}`}></div>
-                    <span className={`text-[10px] sm:text-xs font-medium ${item.textClass} whitespace-nowrap`}>{item.label}</span>
-                  </div>
-                ))}
-              </div>
-           </div>
-        </div>
+    <div className="mx-auto max-w-3xl">
+      <Segmented
+        idPrefix="news"
+        label="News sections"
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'updates', label: 'Updates', count: announcements.length },
+          { value: 'chat', label: 'Chat' },
+        ]}
+        className="mb-6 md:max-w-xs"
+      />
 
-        <div className="divide-y divide-slate-800/50">
-          {announcements.length > 0 ? (
-            announcements.map((ann) => {
-              const isExpanded = expandedId === ann.id;
-              const hasDetails = !!ann.details;
-              
-              return (
-                <div 
-                  key={ann.id} 
-                  className={`transition-all duration-300 ${getAnnouncementStyle(ann.color)} ${hasDetails ? 'cursor-pointer' : ''}`}
-                  onClick={() => hasDetails && toggleExpand(ann.id)}
-                >
-                  <div className="p-5 sm:p-6">
-                    <div className="flex flex-col sm:flex-row gap-4 items-start">
-                       {/* Date Badge */}
-                       {ann.date && (
-                         <div className="flex-shrink-0">
-                           <div className={`inline-flex flex-col items-center justify-center min-w-[80px] px-3 py-2 rounded-lg border text-center ${getBadgeColor(ann.color)}`}>
-                             <Calendar className="w-4 h-4 mb-1 opacity-80" />
-                             <span className="text-sm font-bold">{ann.date}</span>
-                           </div>
-                         </div>
-                       )}
-                       
-                       {/* Content */}
-                       <div className="flex-1 w-full">
-                         <div className="flex justify-between items-start gap-4">
-                           <h3 className="text-lg font-bold leading-tight mb-1">
-                             {renderTextWithLinks(ann.text)}
-                           </h3>
-                           {hasDetails && (
-                             <div className="text-slate-500 mt-1">
-                               {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                             </div>
-                           )}
-                         </div>
-                         
-                         {!hasDetails && !isExpanded && (
-                            <p className="text-sm text-slate-400 mt-1 italic">No additional details</p>
-                         )}
-
-                         {/* Collapsible Details */}
-                         <div className={`grid transition-all duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'}`}>
-                           <div className="overflow-hidden">
-                             <div className="pt-3 border-t border-slate-700/30 text-sm leading-relaxed opacity-90 whitespace-pre-wrap flex gap-3">
-                               <span className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1 flex-shrink-0 select-none">Details</span>
-                               <div>
-                                 {renderTextWithLinks(ann.details || '')}
-                               </div>
-                             </div>
-                           </div>
-                         </div>
-                       </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="p-12 text-center flex flex-col items-center justify-center text-slate-500">
-              <Bell className="w-12 h-12 mb-4 opacity-20" />
-              <p>No new announcements at this time.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Community Discussion Section */}
-      <div className="space-y-6">
-         <div className="flex items-center gap-3 px-2">
-            <MessageSquare className="w-6 h-6 text-violet-400" />
-            <h3 className="text-xl font-bold text-slate-200">Community Chat</h3>
-         </div>
-
-         {/* New Comment Form */}
-         <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
-           <form onSubmit={handlePostComment} className="space-y-4">
-             <div>
-               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Name</label>
-               <input 
-                 type="text" 
-                 value={newAuthor}
-                 onChange={(e) => setNewAuthor(e.target.value)}
-                 placeholder="Your name"
-                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 focus:border-violet-500 outline-none text-sm font-bold"
-               />
-             </div>
-             <div>
-               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Message</label>
-               <textarea 
-                 value={newText}
-                 onChange={(e) => setNewText(e.target.value)}
-                 placeholder="Share your thoughts..."
-                 rows={3}
-                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-200 focus:border-violet-500 outline-none resize-none text-sm"
-               />
-             </div>
-             <div className="flex justify-end">
-               <button 
-                 type="submit"
-                 disabled={!newAuthor.trim() || !newText.trim()}
-                 className="px-6 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-               >
-                 Post Comment
-               </button>
-             </div>
-           </form>
-         </div>
-
-         {/* Comments List */}
-         <div className={comments.length > 2 ? "bg-slate-950/30 rounded-3xl border border-slate-800 overflow-hidden" : ""}>
-           <div className={comments.length > 2 
-             ? "max-h-[600px] overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-600" 
-             : "space-y-4"}>
-              {comments.map(comment => (
-                <CommentItem 
-                  key={comment.id} 
-                  comment={comment} 
-                  isAdmin={isAdmin} 
-                  onDelete={handleDelete} 
-                  onEdit={handleEdit}
-                  onReply={handleReply}
-                  depth={0}
-                />
+      <div id="news-panel" role="tabpanel" aria-labelledby={`news-tab-${view}`} key={view} className="animate-fade">
+        {view === 'updates' ? (
+          <section aria-label="Studio updates">
+            {/* Event key: one row of small legend chips */}
+            <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4" aria-label="Event key">
+              {LEGEND.map((item) => (
+                <span key={item.key} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-[13px] text-text-mid">
+                  <span className={`h-2 w-2 rounded-full ${DOT[item.key]}`} aria-hidden="true" />
+                  {item.label}
+                </span>
               ))}
-           </div>
-         </div>
+            </div>
+
+            {announcements.length > 0 ? (
+              <ul className="card stagger divide-y divide-line overflow-hidden">
+                {announcements.map((ann, i) => {
+                  const isExpanded = expandedId === ann.id;
+                  const hasDetails = !!ann.details;
+                  const key = colorKey(ann.color);
+                  const d = ann.date ? splitDate(ann.date) : null;
+                  const legend = LEGEND.find(l => l.key === key);
+
+                  return (
+                    <li key={ann.id} style={{ ['--i' as any]: i }}>
+                      <div
+                        role={hasDetails ? 'button' : undefined}
+                        tabIndex={hasDetails ? 0 : undefined}
+                        aria-expanded={hasDetails ? isExpanded : undefined}
+                        onClick={() => hasDetails && toggleExpand(ann.id)}
+                        onKeyDown={(e) => {
+                          if (hasDetails && (e.key === 'Enter' || e.key === ' ')) {
+                            e.preventDefault();
+                            toggleExpand(ann.id);
+                          }
+                        }}
+                        className={`flex gap-4 px-4 py-4 md:px-5 transition-colors ${hasDetails ? 'cursor-pointer hover:bg-surface-2/60 active:bg-surface-2' : ''}`}
+                      >
+                        {/* compact date badge */}
+                        <div className="relative flex w-12 shrink-0 flex-col items-center justify-center rounded-sm bg-surface-2 py-1.5 text-center">
+                          {d ? (
+                            <>
+                              <span className={`text-[12px] font-bold uppercase leading-none ${BADGE[key]}`}>{d.mon}</span>
+                              <span className="mt-0.5 text-[20px] font-extrabold leading-none text-text-hi tabular-nums">{d.day}</span>
+                            </>
+                          ) : ann.date ? (
+                            <span className="px-1 text-[12px] font-semibold leading-tight text-text-mid">{ann.date}</span>
+                          ) : (
+                            <CalendarDays className="h-5 w-5 text-text-lo" aria-hidden="true" />
+                          )}
+                          <span
+                            className={`absolute -right-1 -top-1 h-3 w-3 rounded-full ring-2 ring-surface-1 ${DOT[key]}`}
+                            title={legend?.label}
+                            aria-label={legend?.label}
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1 self-center">
+                          <div className="flex items-start justify-between gap-3">
+                            <h3 className="font-semibold leading-snug text-text-hi">{renderTextWithLinks(ann.text)}</h3>
+                            {hasDetails && (
+                              <ChevronDown
+                                className={`mt-0.5 h-5 w-5 shrink-0 text-text-lo transition-transform duration-300 ease-[var(--ease-spring)] ${isExpanded ? 'rotate-180' : ''}`}
+                                aria-hidden="true"
+                              />
+                            )}
+                          </div>
+                          {/* smooth height accordion */}
+                          <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-calm)] ${isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                            <div className="overflow-hidden" inert={!isExpanded}>
+                              <p className="pt-2 text-[15px] leading-relaxed text-text-mid whitespace-pre-wrap">
+                                {renderTextWithLinks(ann.details || '')}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="card">
+                <EmptyState doodle="sparkle" title="Nothing new right now." body="Studio news and events will show up here." />
+              </div>
+            )}
+          </section>
+        ) : (
+          <section aria-label="Community chat">
+            {comments.length > 0 ? (
+              <ul className="stagger space-y-5 pb-4">
+                {comments.map((comment, i) => (
+                  <li key={comment.id} style={{ ['--i' as any]: Math.min(i, 8) }}>
+                    <CommentItem
+                      comment={comment}
+                      isAdmin={isAdmin}
+                      onDelete={handleDelete}
+                      onEdit={handleEdit}
+                      onReply={handleReply}
+                      depth={0}
+                      defaultName={savedName}
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState doodle="swirl" title="It's quiet in here." body="Say hi or ask about this week's class." />
+            )}
+
+            {/* Sticky composer */}
+            <form
+              onSubmit={onComposerSubmit}
+              className="card sticky z-20 mt-2 p-3 bottom-[calc(92px+env(safe-area-inset-bottom,0px))] md:bottom-6 shadow-[var(--shadow-float)]"
+            >
+              {askName ? (
+                <div className="mb-2">
+                  <label htmlFor="chat-name" className="sr-only">Your name</label>
+                  <input
+                    id="chat-name"
+                    type="text"
+                    value={newAuthor}
+                    onChange={(e) => setNewAuthor(e.target.value)}
+                    placeholder="Your name"
+                    autoComplete="name"
+                    className="input !min-h-11 !py-2"
+                  />
+                </div>
+              ) : (
+                <p className="mb-1.5 px-1 text-[13px] text-text-lo">
+                  Posting as <span className="font-semibold text-text-mid">{savedName}</span>
+                  {' · '}
+                  <button type="button" onClick={() => setEditingName(true)} className="inline-flex min-h-11 min-w-11 items-center justify-center -my-3 font-semibold text-brand-soft underline-offset-2 hover:underline">
+                    change
+                  </button>
+                </p>
+              )}
+              <div className="flex items-end gap-2">
+                <label htmlFor="chat-message" className="sr-only">Message</label>
+                <textarea
+                  id="chat-message"
+                  ref={composerRef}
+                  value={newText}
+                  onChange={(e) => setNewText(e.target.value)}
+                  placeholder="Share your thoughts…"
+                  rows={1}
+                  className="input !min-h-11 max-h-32 resize-none !py-2.5 [field-sizing:content]"
+                />
+                <button
+                  type="submit"
+                  disabled={!newAuthor.trim() || !newText.trim()}
+                  aria-label="Post message"
+                  data-tip="Post"
+                  className="tip press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-strong text-white hover:bg-brand disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Send className="h-[18px] w-[18px]" />
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
       </div>
     </div>
   );
@@ -335,13 +372,15 @@ interface CommentItemProps {
   onEdit: (id: string, text: string) => void;
   onReply: (parentId: string, author: string, text: string) => void;
   depth: number;
+  /** UI-only: prefill reply name with the remembered chat name */
+  defaultName?: string;
 }
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, onEdit, onReply, depth }) => {
+const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, onEdit, onReply, depth, defaultName = '' }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.text);
   const [isReplying, setIsReplying] = useState(false);
-  const [replyAuthor, setReplyAuthor] = useState('');
+  const [replyAuthor, setReplyAuthor] = useState(defaultName);
   const [replyText, setReplyText] = useState('');
 
   const handleSaveEdit = () => {
@@ -361,102 +400,112 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
     }
   };
 
+  const isStaff = comment.author === 'Studio Admin';
+
   return (
-    <div className={`flex gap-3 ${depth > 0 ? 'ml-8 md:ml-12 mt-3' : ''}`}>
-      <div className="flex-shrink-0">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold uppercase ${comment.author === 'Studio Admin' ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+    <div className={`flex gap-3 ${depth > 0 ? 'mt-4' : ''}`}>
+      {/* Avatar — on desktop hover pops a small tilted name tag */}
+      <div className="group/avatar relative shrink-0">
+        <div
+          className={`grid h-9 w-9 place-items-center rounded-full text-[13px] font-bold uppercase ${
+            isStaff ? 'bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white' : 'bg-surface-2 text-text-mid'
+          }`}
+          aria-hidden="true"
+        >
           {comment.author.substring(0, 2)}
         </div>
+        <span
+          className="pointer-events-none absolute bottom-full left-0 mb-2 hidden -rotate-6 scale-75 whitespace-nowrap rounded-sm bg-accent px-2 py-1 text-[12px] font-bold text-surface-0 opacity-0 shadow-lg transition-all duration-300 ease-[var(--ease-spring)] md:block md:group-hover/avatar:scale-100 md:group-hover/avatar:opacity-100 md:group-hover/avatar:-rotate-3"
+          aria-hidden="true"
+        >
+          {comment.author}
+        </span>
       </div>
-      
-      <div className="flex-1">
-        <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50 hover:border-slate-800 transition-colors group">
-          <div className="flex justify-between items-start mb-2">
-            <div className="flex items-baseline gap-2">
-              <span className={`text-sm font-bold ${comment.author === 'Studio Admin' ? 'text-rose-400' : 'text-slate-200'}`}>
-                {comment.author}
-              </span>
-              <span className="text-[10px] text-slate-600">{comment.date}</span>
-            </div>
-            
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {isAdmin && (
-                <>
-                  <button onClick={() => setIsEditing(!isEditing)} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-sky-400 transition-colors">
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => onDelete(comment.id)} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-rose-400 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </>
-              )}
-            </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="group">
+          <div className="flex items-start justify-between gap-2">
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              <span className={`font-semibold ${isStaff ? 'text-accent' : 'text-text-hi'}`}>{comment.author}</span>
+              <span className="text-[13px] text-text-lo">{comment.date}</span>
+            </p>
+            {isAdmin && (
+              <div className="-mr-2 -mt-2 flex items-center opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                <button onClick={() => setIsEditing(!isEditing)} aria-label="Edit comment" data-tip="Edit" className="tip press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:bg-surface-2 hover:text-sky-300">
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button onClick={() => onDelete(comment.id)} aria-label="Delete comment" data-tip="Delete" className="tip press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:bg-surface-2 hover:text-rose-300">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
 
           {isEditing ? (
-            <div className="space-y-3">
-              <textarea 
+            <div className="mt-2 space-y-2">
+              <textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none"
+                aria-label="Edit comment"
+                className="input resize-none"
                 rows={2}
               />
-              <div className="flex gap-2 justify-end">
-                <button onClick={() => setIsEditing(false)} className="p-1 text-slate-500 hover:text-slate-300"><X className="w-4 h-4"/></button>
-                <button onClick={handleSaveEdit} className="p-1 text-emerald-500 hover:text-emerald-400"><Save className="w-4 h-4"/></button>
+              <div className="flex justify-end gap-1">
+                <button onClick={() => setIsEditing(false)} aria-label="Cancel edit" className="press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:text-text-hi"><X className="h-4 w-4"/></button>
+                <button onClick={handleSaveEdit} aria-label="Save edit" className="press grid h-11 w-11 place-items-center rounded-full text-emerald-400 hover:text-emerald-300"><Save className="h-4 w-4"/></button>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-slate-400 whitespace-pre-wrap leading-relaxed">{comment.text}</p>
+            <p className="mt-0.5 whitespace-pre-wrap leading-relaxed text-text-mid">{comment.text}</p>
           )}
 
-          <div className="mt-3 flex gap-4">
-             <button 
-               onClick={() => setIsReplying(!isReplying)}
-               className="text-xs font-bold text-slate-600 hover:text-violet-400 transition-colors flex items-center gap-1.5"
-             >
-               <Reply className="w-3 h-3" />
-               Reply
-             </button>
-          </div>
+          <button
+            onClick={() => setIsReplying(!isReplying)}
+            aria-expanded={isReplying}
+            className="press -ml-2 mt-0.5 inline-flex min-h-11 items-center gap-1.5 rounded-full px-2 text-[14px] font-semibold text-text-lo hover:text-brand-soft"
+          >
+            <Reply className="h-4 w-4" />
+            Reply
+          </button>
         </div>
 
         {/* Reply Form */}
         {isReplying && (
-          <form onSubmit={handleSubmitReply} className="mt-3 bg-slate-900 p-4 rounded-xl border border-slate-800 border-l-4 border-l-violet-500/50">
-            <div className="space-y-3">
-              <input 
-                 type="text" 
-                 value={replyAuthor}
-                 onChange={(e) => setReplyAuthor(e.target.value)}
-                 placeholder="Your Name"
-                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-violet-500"
-               />
-               <textarea 
-                 value={replyText}
-                 onChange={(e) => setReplyText(e.target.value)}
-                 placeholder="Write a reply..."
-                 rows={2}
-                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-violet-500 resize-none"
-               />
-               <div className="flex justify-end gap-2">
-                 <button type="button" onClick={() => setIsReplying(false)} className="px-3 py-1.5 text-xs font-bold text-slate-500">Cancel</button>
-                 <button type="submit" disabled={!replyAuthor || !replyText} className="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-500 disabled:opacity-50">Reply</button>
-               </div>
-            </div>
+          <form onSubmit={handleSubmitReply} className="mt-1 space-y-2 border-l-2 border-brand/50 pl-3 animate-fade">
+            <input
+               type="text"
+               value={replyAuthor}
+               onChange={(e) => setReplyAuthor(e.target.value)}
+               placeholder="Your name"
+               aria-label="Your name"
+               className="input !min-h-11 !py-2"
+             />
+             <textarea
+               value={replyText}
+               onChange={(e) => setReplyText(e.target.value)}
+               placeholder="Write a reply…"
+               aria-label="Reply"
+               rows={2}
+               className="input resize-none"
+             />
+             <div className="flex justify-end gap-2">
+               <button type="button" onClick={() => setIsReplying(false)} className="btn-secondary press !min-h-11 text-[15px]">Cancel</button>
+               <button type="submit" disabled={!replyAuthor || !replyText} className="btn-primary press !min-h-11 text-[15px]">Reply</button>
+             </div>
           </form>
         )}
 
         {/* Nested Replies */}
         {comment.replies.map(reply => (
-          <CommentItem 
-            key={reply.id} 
-            comment={reply} 
-            isAdmin={isAdmin} 
-            onDelete={onDelete} 
+          <CommentItem
+            key={reply.id}
+            comment={reply}
+            isAdmin={isAdmin}
+            onDelete={onDelete}
             onEdit={onEdit}
             onReply={onReply}
             depth={depth + 1}
+            defaultName={defaultName}
           />
         ))}
       </div>
