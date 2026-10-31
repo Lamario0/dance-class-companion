@@ -251,7 +251,7 @@ export const CalculatorView: React.FC = () => {
       <div className="flex flex-row items-center justify-between mb-8 gap-2">
         <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
           <div className="flex items-center gap-1 sm:gap-2">
-            <div className="p-1.5 bg-violet-600 rounded-lg shrink-0">
+            <div className="p-1.5 bg-violet-600 rounded-sm shrink-0">
               <Calculator className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <h2 className="text-xs sm:text-xl font-black text-white whitespace-nowrap">Admin Tools</h2>
@@ -290,7 +290,7 @@ export const CalculatorView: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
         <div className="space-y-6">
-          <section className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 border border-slate-800 shadow-xl">
+          <section className="bg-slate-900 rounded-lg p-6 sm:p-8 border border-slate-800 shadow-xl">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-8 flex items-center gap-2">
               <Users className="w-4 h-4 text-violet-400" />
               Attendance
@@ -327,14 +327,14 @@ export const CalculatorView: React.FC = () => {
                 <p className="text-3xl sm:text-4xl font-black text-white tabular-nums">{totalInAttendance}</p>
               </div>
               <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                <button onClick={() => setTotalManualAdjust(v => v - 1)} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-slate-400"><Minus className="w-4 h-4"/></button>
+                <button onClick={() => setTotalManualAdjust(v => v - 1)} className="p-2 bg-slate-800 rounded-sm hover:bg-slate-700 text-slate-400"><Minus className="w-4 h-4"/></button>
                 <span className="text-[9px] text-slate-500 font-black uppercase px-1">Adjust</span>
-                <button onClick={() => setTotalManualAdjust(v => v + 1)} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-slate-400"><Plus className="w-4 h-4"/></button>
+                <button onClick={() => setTotalManualAdjust(v => v + 1)} className="p-2 bg-slate-800 rounded-sm hover:bg-slate-700 text-slate-400"><Plus className="w-4 h-4"/></button>
               </div>
             </div>
           </section>
 
-          <section className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 border border-slate-800 shadow-xl">
+          <section className="bg-slate-900 rounded-lg p-6 sm:p-8 border border-slate-800 shadow-xl">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-8 flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-emerald-400" />
               Comped Guests
@@ -373,7 +373,7 @@ export const CalculatorView: React.FC = () => {
         </div>
 
         <div className="space-y-6">
-          <section className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 border border-slate-800 shadow-xl relative overflow-hidden h-full">
+          <section className="bg-slate-900 rounded-lg p-6 sm:p-8 border border-slate-800 shadow-xl relative overflow-hidden h-full">
              <div className="absolute -top-10 -right-10 opacity-[0.03] pointer-events-none">
                <DollarSign className="w-64 h-64" />
              </div>
@@ -384,7 +384,7 @@ export const CalculatorView: React.FC = () => {
             </h3>
 
             <div className="space-y-8">
-              <div className="bg-slate-950 p-6 sm:p-8 rounded-[2rem] border border-slate-800 relative z-10">
+              <div className="bg-slate-950 p-6 sm:p-8 rounded-lg border border-slate-800 relative z-10">
                 <div className="flex justify-between items-start mb-8 sm:mb-10">
                   <div>
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 sm:mb-2">Total Income</p>
@@ -397,7 +397,7 @@ export const CalculatorView: React.FC = () => {
                       placeholder="0.00"
                       value={customAmount || ''}
                       onChange={(e) => setCustomAmount(Number(e.target.value))}
-                      className="w-16 sm:w-24 bg-slate-900 border border-slate-800 rounded-lg sm:rounded-xl px-2 sm:px-3 py-1.5 text-white text-right font-bold text-xs sm:text-sm outline-none focus:border-emerald-500"
+                      className="w-16 sm:w-24 bg-slate-900 border border-slate-800 rounded-sm sm:rounded-xl px-2 sm:px-3 py-1.5 text-white text-right font-bold text-xs sm:text-sm outline-none focus:border-emerald-500"
                     />
                   </div>
                 </div>
@@ -432,7 +432,7 @@ export const CalculatorView: React.FC = () => {
                   ))}
                 </div>
                 
-                <div className="mt-6 sm:mt-8 p-6 sm:p-8 bg-violet-600/5 rounded-[2rem] border border-violet-500/10 text-center relative overflow-hidden group">
+                <div className="mt-6 sm:mt-8 p-6 sm:p-8 bg-violet-600/5 rounded-lg border border-violet-500/10 text-center relative overflow-hidden group">
                   <div className="absolute inset-0 bg-violet-500/0 group-hover:bg-violet-500/5 transition-colors duration-500"></div>
                   <p className="text-[10px] font-black text-violet-400 uppercase tracking-[0.2em] mb-2">Individual Share</p>
                   <p className="text-3xl sm:text-5xl font-black text-white tabular-nums">${perPersonSplit.toFixed(2)}</p>
@@ -453,7 +453,7 @@ export const CalculatorView: React.FC = () => {
       </div>
 
       {showSuccess && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-8 sm:px-10 py-4 sm:py-5 rounded-2xl sm:rounded-3xl shadow-2xl flex items-center gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-12 duration-500 z-50 whitespace-nowrap">
+        <div className="fixed bottom-[calc(100px+env(safe-area-inset-bottom,0px))] md:bottom-12 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-8 sm:px-10 py-4 sm:py-5 rounded-2xl sm:rounded-3xl shadow-2xl flex items-center gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-12 duration-500 z-50 whitespace-nowrap">
           <div className="p-1 bg-white/20 rounded-full">
             <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
@@ -464,7 +464,7 @@ export const CalculatorView: React.FC = () => {
       {/* Waiver Collection Modal */}
       {showWaiverModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] shadow-2xl max-w-lg w-full p-6 sm:p-10 animate-in zoom-in-95 duration-200 relative my-8">
+          <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-2xl max-w-lg w-full p-6 sm:p-10 animate-in zoom-in-95 duration-200 relative my-8">
             <button 
               onClick={() => setShowWaiverModal(false)}
               className="absolute top-6 right-6 text-slate-500 hover:text-slate-300 transition-colors"
@@ -609,7 +609,7 @@ const Counter: React.FC<CounterProps> = ({ label, count, onChange, price, onPric
       <div className="flex justify-between items-center px-1">
         <span className="text-[10px] sm:text-sm font-black text-slate-300 uppercase tracking-wider">{label}</span>
         {price !== undefined && onPriceChange && (
-          <div className="flex items-center gap-1.5 bg-slate-950 px-2 sm:px-3 py-1 rounded-lg sm:rounded-xl border border-slate-800">
+          <div className="flex items-center gap-1.5 bg-slate-950 px-2 sm:px-3 py-1 rounded-sm sm:rounded-xl border border-slate-800">
              <span className="text-[8px] sm:text-[10px] font-black text-slate-600 uppercase tracking-tighter">$</span>
              <input 
               type="number" 
