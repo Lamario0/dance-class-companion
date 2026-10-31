@@ -42,20 +42,25 @@ export class ErrorBoundary extends React.Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-lg w-full text-center">
-            <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-rose-500">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-            </div>
-            <h2 className="text-xl font-bold text-white mb-4">Something went wrong</h2>
-            <div className="bg-slate-950 rounded-lg p-4 mb-6 text-left overflow-auto max-h-48">
-              <p className="text-sm text-rose-400 font-mono">{errorMessage}</p>
-            </div>
+        <div className="min-h-screen bg-surface-0 flex items-center justify-center p-4">
+          <div className="card p-8 max-w-md w-full text-center">
+            <svg viewBox="0 0 32 32" className="mx-auto mb-5 h-14 w-14 text-violet-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M8.6 17.8c-2.6.3-4.3-2.6-4.4-6.1C4 7.9 5.4 4.6 7.9 4.4c2.6-.2 3.8 3 3.7 6.6-.1 3.4-.6 6.5-3 6.8Z" />
+              <path d="M23.4 25.8c2.6.3 4.3-2.6 4.4-6.1.2-3.8-1.2-7.1-3.7-7.3-2.6-.2-3.8 3-3.7 6.6.1 3.4.6 6.5 3 6.8Z" />
+            </svg>
+            <h2 className="text-xl font-bold text-text-hi mb-2">Oops — we tripped over our own feet.</h2>
+            <p className="text-text-mid mb-5">Reloading usually gets things moving again.</p>
+            <details className="mb-6 text-left">
+              <summary className="cursor-pointer text-[14px] text-text-lo">Technical details</summary>
+              <div className="mt-2 rounded-sm bg-surface-0 p-3 overflow-auto max-h-48">
+                <p className="text-[13px] text-rose-300 font-mono">{errorMessage}</p>
+              </div>
+            </details>
             <button
-              className="bg-violet-600 hover:bg-violet-500 text-white px-6 py-2 rounded-lg font-bold transition-colors"
+              className="btn-primary press w-full"
               onClick={() => window.location.reload()}
             >
-              Reload Page
+              Reload
             </button>
           </div>
         </div>

@@ -1,15 +1,53 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Tab, AppData } from './types';
 import { fetchSheetData } from './services/dataService';
 import { ClassesView } from './components/ClassesView';
 import { MediaView } from './components/MediaView';
 import { AnnouncementsView } from './components/AnnouncementsView';
 import { CalculatorView } from './components/CalculatorView';
-import { Library, Users, Loader2, Megaphone, Lock, ShieldAlert, LogOut } from 'lucide-react';
+import { BottomTabBar, TopNav, BASE_NAV, ADMIN_NAV } from './components/Navigation';
+import { BottomSheet } from './components/ui/BottomSheet';
+import { ToastProvider } from './components/ui/Toast';
+import { EmptyState, DancingDots } from './components/ui/Doodles';
+import { LogOut, RotateCw } from 'lucide-react';
+
+const Logo: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#d946ef" />
+        <stop offset="100%" stopColor="#701a75" />
+      </linearGradient>
+    </defs>
+    <path d="M45,32 c1,0 2,-1 2,-2 c0,-1 -1,-2 -2,-2 c-2,0 -4,2 -4,5 c0,2 1,3 3,3 c2,0 3,-1 4,-3 c0,-2 -2,-4 -4,-4 M50,45 c2,-5 6,-8 10,-8 c4,0 7,4 7,8 c0,6 -10,12 -15,15 c-5,-3 -15,-9 -15,-15 c0,-4 3,-8 7,-8 c4,0 8,3 10,8 M38,35 c-2,-2 -5,-3 -8,-2 c-3,1 -5,4 -5,7 c0,3 2,5 5,6 c3,1 6,-1 8,-4 c2,-3 1,-7 -1,-9 M62,35 c2,-2 5,-3 8,-2 c3,1 5,4 5,7 c0,3 -2,5 -5,6 c-3,1 -6,-1 -8,-4 c-2,-3 -1,-7 1,-9 M50,55 c0,0 -5,10 -10,15 c-5,5 -10,5 -10,5 M50,55 c0,0 5,10 10,15 c5,5 10,5 10,5" fill="url(#logoGrad)"/>
+  </svg>
+);
+
+/** "Warming up the dance floor…" skeleton of the class cards. */
+const LoadingSkeleton: React.FC = () => (
+  <div aria-busy="true">
+    <div className="mb-6 flex items-center gap-3 text-text-mid">
+      <DancingDots label="Loading classes" />
+      <span className="font-medium">Warming up the dance floor…</span>
+    </div>
+    <div className="grid gap-4 md:grid-cols-2">
+      {[0, 1].map(i => (
+        <div key={i} className="card p-6 animate-pulse motion-reduce:animate-none">
+          <div className="h-6 w-2/3 rounded-sm bg-surface-2" />
+          <div className="mt-6 h-3 w-28 rounded-sm bg-surface-2" />
+          {[0, 1, 2, 3].map(r => (
+            <div key={r} className="mt-5 h-4 rounded-sm bg-surface-2" style={{ width: `${80 - r * 12}%` }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.CLASSES);
+  const [direction, setDirection] = useState<'left' | 'right'>('right');
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -22,22 +60,34 @@ const App: React.FC = () => {
   const [loginPending, setLoginPending] = useState(false);
   const clickTimeoutRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    const loadData = async () => {
-      const fetchedData = await fetchSheetData();
-      setData(fetchedData);
-      setLoading(false);
-    };
-    loadData();
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const fetchedData = await fetchSheetData();
+    setData(fetchedData);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const navItems = isAuthenticated ? [...BASE_NAV, ADMIN_NAV] : BASE_NAV;
+  const tabIndex = (t: Tab) => navItems.findIndex(i => i.tab === t);
 
   const navigateTo = (tab: Tab) => {
     // We allow navigation without logging out the admin
+    if (tab === activeTab) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setDirection(tabIndex(tab) >= tabIndex(activeTab) ? 'right' : 'left');
     setActiveTab(tab);
+    window.scrollTo({ top: 0 });
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setDirection('left');
     setActiveTab(Tab.CLASSES);
   };
 
@@ -46,10 +96,11 @@ const App: React.FC = () => {
     setLogoClicks(newCount);
 
     if (clickTimeoutRef.current) window.clearTimeout(clickTimeoutRef.current);
-    
+
     if (newCount === 3) {
       setLogoClicks(0);
       if (isAuthenticated) {
+        setDirection('right');
         setActiveTab(Tab.CALCULATOR);
       } else {
         setShowPasswordPrompt(true);
@@ -72,6 +123,7 @@ const App: React.FC = () => {
       if (!response.ok) throw new Error('Incorrect password');
       setIsAuthenticated(true);
       setShowPasswordPrompt(false);
+      setDirection('right');
       setActiveTab(Tab.CALCULATOR);
       setPasswordInput('');
     } catch {
@@ -82,168 +134,142 @@ const App: React.FC = () => {
     }
   };
 
+  const closePasswordPrompt = useCallback(() => {
+    setShowPasswordPrompt(false);
+    setPasswordInput('');
+    setLoginError(false);
+  }, []);
+
   const videoOfMonth = data?.videos.find(v => v.category === 'month');
+  // fetchSheetData resolves to empty lists when the sheet can't be reached.
+  const loadFailed =
+    !!data && !data.classes.length && !data.videos.length && !data.songs.length && !data.announcements.length;
+  const current = navItems.find(i => i.tab === activeTab) ?? BASE_NAV[0];
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-100">
-      {/* Header */}
-      <header className="bg-slate-900/80 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md">
-        <div className="max-w-5xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between gap-1 sm:gap-4">
-          
-          {/* Logo & Header Text - Header text visible on desktop (sm+) */}
-          <div className="flex items-center gap-2 group cursor-pointer flex-shrink-0" onClick={handleLogoClick}>
-            <div className="relative">
-              <div className="absolute -inset-1 bg-gradient-to-r from-fuchsia-500 to-purple-600 rounded-xl blur opacity-20 group-hover:opacity-60 transition duration-700"></div>
-              <div className="relative flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-xl overflow-hidden p-1">
-                <svg viewBox="0 0 100 100" className="w-full h-full group-hover:scale-110 transition-transform duration-300" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#d946ef" />
-                      <stop offset="100%" stopColor="#701a75" />
-                    </linearGradient>
-                  </defs>
-                  <path d="M45,32 c1,0 2,-1 2,-2 c0,-1 -1,-2 -2,-2 c-2,0 -4,2 -4,5 c0,2 1,3 3,3 c2,0 3,-1 4,-3 c0,-2 -2,-4 -4,-4 M50,45 c2,-5 6,-8 10,-8 c4,0 7,4 7,8 c0,6 -10,12 -15,15 c-5,-3 -15,-9 -15,-15 c0,-4 3,-8 7,-8 c4,0 8,3 10,8 M38,35 c-2,-2 -5,-3 -8,-2 c-3,1 -5,4 -5,7 c0,3 2,5 5,6 c3,1 6,-1 8,-4 c2,-3 1,-7 -1,-9 M62,35 c2,-2 5,-3 8,-2 c3,1 5,4 5,7 c0,3 -2,5 -5,6 c-3,1 -6,-1 -8,-4 c-2,-3 -1,-7 1,-9 M50,55 c0,0 -5,10 -10,15 c-5,5 -10,5 -10,5 M50,55 c0,0 5,10 10,15 c5,5 10,5 10,5" fill="url(#logoGrad)"/>
-                </svg>
-              </div>
+    <ToastProvider>
+      <div id="app-shell" className="min-h-screen bg-surface-0 font-sans text-text-hi flex flex-col">
+        {/* Header — slim on mobile: logo (secret triple-tap) + page title */}
+        <header
+          className="sticky top-0 z-30 border-b border-line/60 bg-surface-0/80 backdrop-blur-xl"
+          style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        >
+          <div className="mx-auto flex h-14 md:h-16 max-w-5xl items-center justify-between gap-4 px-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={handleLogoClick}
+                aria-label="Dance Class Companion"
+                className="press -ml-1 grid h-11 w-11 shrink-0 place-items-center rounded-sm"
+              >
+                <span className="grid h-9 w-9 place-items-center rounded-sm bg-white p-1 shadow-sm">
+                  <Logo className="h-full w-full" />
+                </span>
+              </button>
+              <h1 className="truncate text-[17px] font-bold tracking-tight md:hidden">{current.title}</h1>
+              <p className="hidden text-lg font-bold tracking-tight md:block">
+                Dance Class <span className="text-brand-soft">Companion</span>
+              </p>
             </div>
-            <h1 className="text-sm sm:text-lg font-bold tracking-tight text-slate-100 hidden sm:block">
-              Dance Class <span className="text-violet-500">Companion</span>
-            </h1>
+            <TopNav items={navItems} active={activeTab} onChange={navigateTo} />
           </div>
-          
-          {/* Navigation - Right aligned for desktop, full-width scaled for mobile */}
-          <nav className="flex items-center gap-0.5 sm:gap-1.5 bg-slate-800 border border-slate-700 p-0.5 sm:p-1 rounded-lg sm:rounded-xl flex-1 sm:flex-none justify-end min-w-0">
-            <button
-              onClick={() => navigateTo(Tab.CLASSES)}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
-                activeTab === Tab.CLASSES ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
-              <span>Classes</span>
-            </button>
-            <button
-              onClick={() => navigateTo(Tab.MEDIA)}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
-                activeTab === Tab.MEDIA ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Library className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
-              <span>Media</span>
-            </button>
-            <button
-              onClick={() => navigateTo(Tab.ANNOUNCEMENTS)}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
-                activeTab === Tab.ANNOUNCEMENTS ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Megaphone className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
-              <span>News</span>
-            </button>
-            {isAuthenticated && (
-              <>
-                <button
-                  onClick={() => navigateTo(Tab.CALCULATOR)}
-                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 ${
-                    activeTab === Tab.CALCULATOR ? 'bg-violet-600 text-white shadow-sm' : 'text-violet-400/60 hover:text-violet-400'
-                  }`}
-                >
-                  <ShieldAlert className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
-                  <span>Admin</span>
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 rounded-md sm:rounded-lg text-[10px] sm:text-sm font-bold transition-all whitespace-nowrap min-w-0 text-rose-400 hover:text-rose-200 hover:bg-rose-500/20"
-                >
-                  <LogOut className="w-3.5 h-3.5 sm:w-4 h-4 shrink-0" />
-                  <span className="hidden sm:inline">Exit</span>
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+        </header>
 
-      {/* Password Prompt Overlay */}
-      {showPasswordPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-          <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] shadow-2xl max-w-sm w-full p-10 text-center animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 bg-violet-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-violet-400 border border-violet-500/20">
-              <Lock className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-black text-white mb-2">Restricted Access</h2>
-            <p className="text-slate-500 text-sm mb-8">Please enter the admin passcode to access party tools.</p>
-            <form onSubmit={handlePasswordSubmit}>
-              <input 
-                type="password" 
-                autoFocus
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                className={`w-full bg-slate-950 border ${loginError ? 'border-rose-500' : 'border-slate-800'} rounded-2xl px-5 py-4 text-center text-xl tracking-[0.5em] focus:border-violet-500 outline-none mb-6 transition-colors`}
+        {/* Main Content */}
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 md:pt-10 pb-10 md:pb-16">
+          {loading ? (
+            <LoadingSkeleton />
+          ) : !data || loadFailed ? (
+            <div className="card mx-auto max-w-md">
+              <EmptyState
+                doodle="feet"
+                title="Couldn't reach the studio."
+                body="Check your connection and try again."
+                action={
+                  <button onClick={loadData} className="btn-primary press">
+                    <RotateCw className="h-4 w-4" />
+                    <span className="slide-label"><span>Try again</span><span aria-hidden="true">Try again</span></span>
+                  </button>
+                }
               />
-              <div className="flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setShowPasswordPrompt(false);
-                    setPasswordInput('');
-                    setLoginError(false);
-                  }}
-                  className="flex-1 py-4 bg-slate-800 text-slate-400 font-bold rounded-2xl hover:bg-slate-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={loginPending}
-                  className="flex-1 py-4 bg-violet-600 text-white font-bold rounded-2xl hover:bg-violet-500 transition-all shadow-lg shadow-violet-900/20 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {loginPending ? 'Checking...' : 'Unlock'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+          ) : (
+            <div key={activeTab} className={direction === 'right' ? 'enter-right' : 'enter-left'}>
+              {activeTab === Tab.CLASSES && (
+                <ClassesView classes={data.classes} videoOfMonth={videoOfMonth} />
+              )}
+              {activeTab === Tab.MEDIA && (
+                <MediaView videos={data.videos} songs={data.songs} />
+              )}
+              {activeTab === Tab.ANNOUNCEMENTS && (
+                <AnnouncementsView announcements={data.announcements} isAdmin={isAuthenticated} />
+              )}
+              {activeTab === Tab.CALCULATOR && isAuthenticated && (
+                <>
+                  <div className="mx-auto mb-6 flex max-w-4xl items-center justify-between gap-3">
+                    <p className="text-text-lo text-[15px]">Instructor mode is on.</p>
+                    <button onClick={handleLogout} className="btn-secondary press !min-h-11 shrink-0 whitespace-nowrap text-rose-300 hover:!bg-rose-500/15">
+                      <LogOut className="h-4 w-4" />
+                      Exit admin
+                    </button>
+                  </div>
+                  <CalculatorView />
+                </>
+              )}
+            </div>
+          )}
+        </main>
 
-      {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-64">
-             <Loader2 className="w-10 h-10 text-violet-500 animate-spin mb-4" />
-             <p className="text-slate-500 font-medium">Loading your dance studio...</p>
+        {/* Footer */}
+        <footer className="border-t border-line/60 py-8 pb-[calc(112px+env(safe-area-inset-bottom,0px))] md:pb-8">
+          <div className="mx-auto max-w-5xl px-4 text-center text-[14px] text-text-lo">
+            <p>© {new Date().getFullYear()} Dance Class Companion · Master the basics. Dance your story.</p>
+            <p className="mt-2">
+              <a href="/privacy.html" className="inline-block py-3 underline underline-offset-4 hover:text-text-mid">Privacy Policy</a>
+            </p>
           </div>
-        ) : !data ? (
-           <div className="text-center p-12">
-             <p className="text-red-400">Failed to load data.</p>
-           </div>
-        ) : (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {activeTab === Tab.CLASSES && (
-              <ClassesView classes={data.classes} videoOfMonth={videoOfMonth} />
-            )}
-            {activeTab === Tab.MEDIA && (
-              <MediaView videos={data.videos} songs={data.songs} />
-            )}
-            {activeTab === Tab.ANNOUNCEMENTS && (
-              <AnnouncementsView announcements={data.announcements} isAdmin={isAuthenticated} />
-            )}
-            {activeTab === Tab.CALCULATOR && isAuthenticated && (
-              <CalculatorView />
-            )}
+        </footer>
+      </div>
+
+      <BottomTabBar items={navItems} active={activeTab} onChange={navigateTo} />
+
+      {/* Instructor passcode — bottom sheet on mobile, dialog on desktop */}
+      <BottomSheet
+        open={showPasswordPrompt}
+        onClose={closePasswordPrompt}
+        title="Instructor tools"
+        size="sm"
+      >
+        <p className="text-text-mid">Enter the instructor passcode.</p>
+        <form onSubmit={handlePasswordSubmit} className="mt-5">
+          <label htmlFor="admin-passcode" className="sr-only">Passcode</label>
+          <input
+            id="admin-passcode"
+            type="password"
+            autoFocus
+            autoComplete="current-password"
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
+            aria-invalid={loginError}
+            aria-describedby={loginError ? 'admin-passcode-error' : undefined}
+            className={`input text-center text-xl tracking-[0.4em] ${loginError ? '!border-rose-500' : ''}`}
+          />
+          {loginError && (
+            <p id="admin-passcode-error" className="mt-2 text-[14px] text-rose-300 animate-fade">
+              That's not it — give it another try.
+            </p>
+          )}
+          <div className="mt-5 flex gap-3">
+            <button type="button" onClick={closePasswordPrompt} className="btn-secondary press flex-1">
+              Cancel
+            </button>
+            <button type="submit" disabled={loginPending} className="btn-primary press flex-1">
+              {loginPending ? <DancingDots label="Checking" dotClass="bg-white" /> : 'Unlock'}
+            </button>
           </div>
-        )}
-      </main>
-      
-      {/* Footer */}
-      <footer className="border-t border-slate-800 bg-slate-900 py-8 mt-auto">
-        <div className="max-w-5xl mx-auto px-4 text-center">
-          <p className="text-slate-500 text-sm">© {new Date().getFullYear()} Dance Class Companion. Master the Basics. Dance Your Story.</p>
-          <p className="text-slate-600 text-xs mt-2">Powered by Gemini AI & Google Sheets</p>
-          <p className="text-slate-600 text-xs mt-2"><a href="/privacy.html" className="hover:text-slate-400 underline">Privacy Policy</a></p>
-        </div>
-      </footer>
-    </div>
+        </form>
+      </BottomSheet>
+    </ToastProvider>
   );
 };
 
