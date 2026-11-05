@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Announcement } from '../types';
 import { MessageCircle, Trash2, Edit2, Save, X, Reply, ChevronDown, Send, CalendarDays } from 'lucide-react';
 import { Segmented } from './ui/Segmented';
 import { EmptyState } from './ui/Doodles';
 import { useToast } from './ui/Toast';
+import { DancingDots } from './ui/Doodles';
+import {
+  ChatThread, subscribeToChat, postChatMessage, buildThreads, moderateChat, MAX_AUTHOR, MAX_TEXT,
+} from '../services/chatService';
 
 // UI-only: remember the chat name locally after the first post.
 const NAME_KEY = 'dcc_chat_name';
@@ -25,6 +30,18 @@ const colorKey = (c?: string) => {
   const k = c?.toLowerCase().trim() || 'white';
   return k in DOT ? k : 'white';
 };
+const useIsDesktop = () => {
+  const query = '(min-width: 768px)';
+  const [desktop, setDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setDesktop(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return desktop;
+};
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /** "10/22/2026" → { mon: "Oct", day: "22" }; anything else is shown as-is. */
 const splitDate = (d: string) => {
@@ -37,17 +54,19 @@ const splitDate = (d: string) => {
 interface AnnouncementsViewProps {
   announcements: Announcement[];
   isAdmin?: boolean;
+  /** signed instructor session token from /api/admin-login, for edit/delete */
+  adminToken?: string | null;
 }
 
-interface Comment {
-  id: string;
-  author: string;
-  text: string;
-  date: string;
-  replies: Comment[];
-}
+type Comment = ChatThread;
 
-const STORAGE_KEY = 'dance_app_comments_v1';
+const formatDate = (d: Date | null) => (d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Just now');
+
+/** Season the chat resets on, for the "fresh start" note: "Oct–Dec". */
+const quarterRange = () => {
+  const q = Math.floor(new Date().getMonth() / 3) * 3;
+  return `${MONTHS[q]}–${MONTHS[q + 2]}`;
+};
 
 // Legend colors mapping
 const LEGEND = [
@@ -58,8 +77,11 @@ const LEGEND = [
   { label: 'Misc/Other', colorClass: 'bg-slate-400', textClass: 'text-slate-400', key: 'white' }
 ];
 
-export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announcements, isAdmin = false }) => {
+export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announcements, isAdmin = false, adminToken = null }) => {
   const [comments, setComments] = useState<Comment[]>([]);
+  const [chatStatus, setChatStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [chatRetry, setChatRetry] = useState(0);
+  const [posting, setPosting] = useState(false);
   const [newAuthor, setNewAuthor] = useState(readSavedName);
   const [newText, setNewText] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -69,88 +91,76 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   const [editingName, setEditingName] = useState(false);
   const toast = useToast();
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const composerFormRef = useRef<HTMLFormElement>(null);
+  const isDesktop = useIsDesktop();
 
-  // Load comments from local storage
+  // Mobile: publish the floating chat bar's height so the page and music player clear it.
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setComments(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse comments", e);
-      }
-    } else {
-      // Default welcome comment
-      setComments([
-        {
-          id: '1',
-          author: 'Studio Admin',
-          text: 'Welcome to the community discussion! Feel free to ask questions or chat about this week’s class below.',
-          date: new Date().toLocaleDateString(),
-          replies: []
-        }
-      ]);
+    const root = document.documentElement;
+    const el = composerFormRef.current;
+    if (view !== 'chat' || isDesktop || !el) {
+      root.style.setProperty('--chat-h', '0px');
+      return;
     }
-  }, []);
+    const ro = new ResizeObserver(() => root.style.setProperty('--chat-h', `${el.offsetHeight + 8}px`));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty('--chat-h', '0px');
+    };
+  }, [view, isDesktop]);
 
-  // Save comments to local storage whenever they change
+  // Live chat from Firestore (this quarter only — see services/chatService.ts).
   useEffect(() => {
-    if (comments.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
+    const unsub = subscribeToChat(
+      msgs => {
+        setComments(buildThreads(msgs));
+        setChatStatus('ready');
+      },
+      err => {
+        console.error('Chat failed to load', err);
+        setChatStatus('error');
+      },
+    );
+    return unsub;
+  }, [chatRetry]);
+
+  const handleDelete = async (commentId: string) => {
+    if (!adminToken) return;
+    if (!window.confirm('Delete this message and its replies?')) return;
+    const t = toast.show('Deleting…', 'loading');
+    try {
+      await moderateChat(adminToken, { type: 'delete', id: commentId });
+      t.update('Deleted', 'success');
+    } catch (err) {
+      t.update((err as Error).message || "Couldn't delete that.", 'error');
     }
-  }, [comments]);
-
-  const handlePostComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAuthor.trim() || !newText.trim()) return;
-
-    const newComment: Comment = {
-      id: Date.now().toString(),
-      author: newAuthor.trim(),
-      text: newText.trim(),
-      date: new Date().toLocaleDateString(),
-      replies: []
-    };
-
-    setComments(prev => [newComment, ...prev]);
-    setNewText('');
   };
 
-  const updateCommentTree = (items: Comment[], targetId: string, action: (item: Comment) => Comment | null): Comment[] => {
-    return items.map(item => {
-      if (item.id === targetId) {
-        return action(item);
-      }
-      if (item.replies.length > 0) {
-        const updatedReplies = updateCommentTree(item.replies, targetId, action).filter(Boolean) as Comment[];
-        return { ...item, replies: updatedReplies };
-      }
-      return item;
-    }).filter(Boolean) as Comment[];
+  const handleEdit = async (commentId: string, text: string) => {
+    if (!adminToken) return false;
+    const t = toast.show('Saving…', 'loading');
+    try {
+      await moderateChat(adminToken, { type: 'edit', id: commentId, text });
+      t.update('Saved', 'success');
+      return true;
+    } catch (err) {
+      t.update((err as Error).message || "Couldn't save that.", 'error');
+      return false;
+    }
   };
 
-  const handleDelete = (commentId: string) => {
-    if (!window.confirm("Delete this comment?")) return;
-    setComments(prev => updateCommentTree(prev, commentId, () => null));
-  };
-
-  const handleEdit = (commentId: string, newText: string) => {
-    setComments(prev => updateCommentTree(prev, commentId, (item) => ({ ...item, text: newText })));
-  };
-
-  const handleReply = (parentId: string, author: string, text: string) => {
-    const reply: Comment = {
-      id: Date.now().toString(),
-      author,
-      text,
-      date: new Date().toLocaleDateString(),
-      replies: []
-    };
-
-    setComments(prev => updateCommentTree(prev, parentId, (item) => ({
-      ...item,
-      replies: [...item.replies, reply]
-    })));
+  const handleReply = async (parentId: string, author: string, text: string) => {
+    const t = toast.show('Posting…', 'loading');
+    try {
+      await postChatMessage(author, text, parentId);
+      t.update('Posted!', 'success');
+      return true;
+    } catch (err) {
+      console.error(err);
+      t.update("Couldn't post — check your connection.", 'error');
+      return false;
+    }
   };
 
   const toggleExpand = (id: string) => {
@@ -174,18 +184,30 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
     });
   };
 
-  const onComposerSubmit = (e: React.FormEvent) => {
+  const onComposerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAuthor.trim() || !newText.trim()) return;
+    const author = newAuthor.trim();
+    const text = newText.trim();
+    if (!author || !text || posting) return;
+    setPosting(true);
     const t = toast.show('Posting…', 'loading');
-    saveName(newAuthor.trim());
-    setSavedName(newAuthor.trim());
+    saveName(author);
+    setSavedName(author);
     setEditingName(false);
-    handlePostComment(e);
-    window.setTimeout(() => t.update('Posted!', 'success'), 450);
+    try {
+      await postChatMessage(author, text);
+      setNewText('');
+      t.update('Posted!', 'success');
+    } catch (err) {
+      console.error(err);
+      t.update("Couldn't post — check your connection.", 'error');
+    } finally {
+      setPosting(false);
+    }
   };
 
   const askName = !savedName || editingName;
+  const placeComposer = (node: React.ReactElement) => (isDesktop ? node : createPortal(node, document.body));
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -288,31 +310,64 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
             )}
           </section>
         ) : (
-          <section aria-label="Community chat">
-            {comments.length > 0 ? (
-              <ul className="stagger space-y-5 pb-4">
-                {comments.map((comment, i) => (
-                  <li key={comment.id} style={{ ['--i' as any]: Math.min(i, 8) }}>
-                    <CommentItem
-                      comment={comment}
-                      isAdmin={isAdmin}
-                      onDelete={handleDelete}
-                      onEdit={handleEdit}
-                      onReply={handleReply}
-                      depth={0}
-                      defaultName={savedName}
-                    />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState doodle="swirl" title="It's quiet in here." body="Say hi or ask about this week's class." />
-            )}
+          <section aria-label="Community chat" className="md:overflow-hidden md:rounded-[var(--radius-lg)] md:border md:border-line md:bg-surface-1 md:shadow-[var(--shadow-card)]">
+            {/* Desktop: the comments scroll inside the card; mobile: the page scrolls */}
+            <div className="md:max-h-[min(60vh,560px)] md:overflow-y-auto md:overscroll-contain md:p-5 [scrollbar-width:thin] [scrollbar-color:var(--color-line)_transparent]">
+              <p className="mb-5 flex items-start gap-2 text-[14px] leading-snug text-text-lo">
+                <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-brand-soft" aria-hidden="true" />
+                <span>
+                  Chat with your classmates. The board starts fresh every quarter — this one runs {quarterRange()}.
+                </span>
+              </p>
+              {chatStatus === 'loading' ? (
+                <div className="flex items-center gap-3 py-6 text-text-mid">
+                  <DancingDots label="Loading chat" />
+                  <span>Loading the chat…</span>
+                </div>
+              ) : chatStatus === 'error' ? (
+                <EmptyState
+                  doodle="swirl"
+                  title="Couldn't load the chat."
+                  body="Check your connection and try again."
+                  action={
+                    <button type="button" onClick={() => { setChatStatus('loading'); setChatRetry(n => n + 1); }} className="btn-secondary press">
+                      Try again
+                    </button>
+                  }
+                />
+              ) : comments.length > 0 ? (
+                <ul className="stagger space-y-5 pb-4 md:pb-0">
+                  {comments.map((comment, i) => (
+                    <li key={comment.id} style={{ ['--i' as any]: Math.min(i, 8) }}>
+                      <CommentItem
+                        comment={comment}
+                        isAdmin={isAdmin}
+                        onDelete={handleDelete}
+                        onEdit={handleEdit}
+                        onReply={handleReply}
+                        depth={0}
+                        defaultName={savedName}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState doodle="swirl" title="It's quiet in here." body="Say hi or ask about this week's class." />
+              )}
+            </div>
 
-            {/* Sticky composer */}
-            <form
+            {/* Mobile: floating bar that rises out of the top of the bottom nav.
+                Desktop: sits under the scrollable comments, inside the card. */}
+            {/* Mobile: portalled to <body> so the tab-switch transform can't trap position:fixed */}
+            {placeComposer(<form
+              ref={composerFormRef}
               onSubmit={onComposerSubmit}
-              className="card sticky z-20 mt-2 p-3 bottom-[calc(92px+env(safe-area-inset-bottom,0px))] md:bottom-6 shadow-[var(--shadow-float)]"
+              className={
+                isDesktop
+                  ? 'border-t border-line bg-surface-1 p-3'
+                  : 'rise-from-nav fixed inset-x-0 z-[38] mx-auto w-[calc(100%-2rem)] max-w-md rounded-[var(--radius-lg)] border border-white/10 bg-surface-1/90 p-3 shadow-[var(--shadow-float)] backdrop-blur-xl backdrop-saturate-150'
+              }
+              style={isDesktop ? undefined : { bottom: 'calc(var(--nav-h) + 8px)' }}
             >
               {askName ? (
                 <div className="mb-2">
@@ -320,6 +375,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                   <input
                     id="chat-name"
                     type="text"
+                    maxLength={MAX_AUTHOR}
                     value={newAuthor}
                     onChange={(e) => setNewAuthor(e.target.value)}
                     placeholder="Your name"
@@ -344,12 +400,13 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                   value={newText}
                   onChange={(e) => setNewText(e.target.value)}
                   placeholder="Share your thoughts…"
+                  maxLength={MAX_TEXT}
                   rows={1}
                   className="input !min-h-11 max-h-32 resize-none !py-2.5 [field-sizing:content]"
                 />
                 <button
                   type="submit"
-                  disabled={!newAuthor.trim() || !newText.trim()}
+                  disabled={!newAuthor.trim() || !newText.trim() || posting}
                   aria-label="Post message"
                   data-tip="Post"
                   className="tip press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-strong text-white hover:bg-brand disabled:opacity-40 disabled:cursor-not-allowed"
@@ -357,7 +414,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                   <Send className="h-[18px] w-[18px]" />
                 </button>
               </div>
-            </form>
+            </form>)}
           </section>
         )}
       </div>
@@ -369,8 +426,8 @@ interface CommentItemProps {
   comment: Comment;
   isAdmin: boolean;
   onDelete: (id: string) => void;
-  onEdit: (id: string, text: string) => void;
-  onReply: (parentId: string, author: string, text: string) => void;
+  onEdit: (id: string, text: string) => Promise<boolean>;
+  onReply: (parentId: string, author: string, text: string) => Promise<boolean>;
   depth: number;
   /** UI-only: prefill reply name with the remembered chat name */
   defaultName?: string;
@@ -383,23 +440,27 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
   const [replyAuthor, setReplyAuthor] = useState(defaultName);
   const [replyText, setReplyText] = useState('');
 
-  const handleSaveEdit = () => {
-    if (editText.trim()) {
-      onEdit(comment.id, editText.trim());
-      setIsEditing(false);
-    }
+  const [busy, setBusy] = useState(false);
+
+  const handleSaveEdit = async () => {
+    if (!editText.trim() || busy) return;
+    setBusy(true);
+    if (await onEdit(comment.id, editText.trim())) setIsEditing(false);
+    setBusy(false);
   };
 
-  const handleSubmitReply = (e: React.FormEvent) => {
+  const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (replyAuthor.trim() && replyText.trim()) {
-      onReply(comment.id, replyAuthor.trim(), replyText.trim());
+    if (!replyAuthor.trim() || !replyText.trim() || busy) return;
+    setBusy(true);
+    if (await onReply(comment.id, replyAuthor.trim(), replyText.trim())) {
       setIsReplying(false);
-      setReplyAuthor('');
       setReplyText('');
     }
+    setBusy(false);
   };
 
+  // "Studio Admin" is reserved by firestore.rules, so only older built-in posts carry it.
   const isStaff = comment.author === 'Studio Admin';
 
   return (
@@ -427,7 +488,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
           <div className="flex items-start justify-between gap-2">
             <p className="flex flex-wrap items-baseline gap-x-2">
               <span className={`font-semibold ${isStaff ? 'text-accent' : 'text-text-hi'}`}>{comment.author}</span>
-              <span className="text-[13px] text-text-lo">{comment.date}</span>
+              <span className="text-[13px] text-text-lo">{formatDate(comment.createdAt)}</span>
             </p>
             {isAdmin && (
               <div className="-mr-2 -mt-2 flex items-center opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
@@ -478,9 +539,11 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
                onChange={(e) => setReplyAuthor(e.target.value)}
                placeholder="Your name"
                aria-label="Your name"
+               maxLength={MAX_AUTHOR}
                className="input !min-h-11 !py-2"
              />
              <textarea
+               maxLength={MAX_TEXT}
                value={replyText}
                onChange={(e) => setReplyText(e.target.value)}
                placeholder="Write a reply…"
@@ -490,7 +553,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
              />
              <div className="flex justify-end gap-2">
                <button type="button" onClick={() => setIsReplying(false)} className="btn-secondary press !min-h-11 text-[15px]">Cancel</button>
-               <button type="submit" disabled={!replyAuthor || !replyText} className="btn-primary press !min-h-11 text-[15px]">Reply</button>
+               <button type="submit" disabled={!replyAuthor.trim() || !replyText.trim() || busy} className="btn-primary press !min-h-11 text-[15px]">Reply</button>
              </div>
           </form>
         )}

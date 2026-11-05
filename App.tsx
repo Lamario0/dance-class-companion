@@ -4,9 +4,13 @@ import { Tab, AppData } from './types';
 import { fetchSheetData } from './services/dataService';
 import { ClassesView } from './components/ClassesView';
 import { MediaView } from './components/MediaView';
-import { AnnouncementsView } from './components/AnnouncementsView';
+// News pulls in Firestore for the chat, so it loads on first visit instead of up front.
+const AnnouncementsView = React.lazy(() =>
+  import('./components/AnnouncementsView').then(m => ({ default: m.AnnouncementsView })),
+);
 import { CalculatorView } from './components/CalculatorView';
 import { BottomTabBar, TopNav, BASE_NAV, ADMIN_NAV } from './components/Navigation';
+import { MusicProvider } from './components/music/MusicPlayer';
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ToastProvider } from './components/ui/Toast';
 import { EmptyState, DancingDots } from './components/ui/Doodles';
@@ -23,6 +27,8 @@ const Logo: React.FC<{ className?: string }> = ({ className = '' }) => (
     <path d="M45,32 c1,0 2,-1 2,-2 c0,-1 -1,-2 -2,-2 c-2,0 -4,2 -4,5 c0,2 1,3 3,3 c2,0 3,-1 4,-3 c0,-2 -2,-4 -4,-4 M50,45 c2,-5 6,-8 10,-8 c4,0 7,4 7,8 c0,6 -10,12 -15,15 c-5,-3 -15,-9 -15,-15 c0,-4 3,-8 7,-8 c4,0 8,3 10,8 M38,35 c-2,-2 -5,-3 -8,-2 c-3,1 -5,4 -5,7 c0,3 2,5 5,6 c3,1 6,-1 8,-4 c2,-3 1,-7 -1,-9 M62,35 c2,-2 5,-3 8,-2 c3,1 5,4 5,7 c0,3 -2,5 -5,6 c-3,1 -6,-1 -8,-4 c-2,-3 -1,-7 1,-9 M50,55 c0,0 -5,10 -10,15 c-5,5 -10,5 -10,5 M50,55 c0,0 5,10 10,15 c5,5 10,5 10,5" fill="url(#logoGrad)"/>
   </svg>
 );
+
+const EMPTY_SONGS: AppData['songs'] = [];
 
 /** "Warming up the dance floor…" skeleton of the class cards. */
 const LoadingSkeleton: React.FC = () => (
@@ -56,6 +62,8 @@ const App: React.FC = () => {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Signed session token from /api/admin-login; lets instructors edit/delete chat messages.
+  const [adminToken, setAdminToken] = useState<string | null>(null);
   const [loginError, setLoginError] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
   const clickTimeoutRef = useRef<number | null>(null);
@@ -87,6 +95,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setAdminToken(null);
     setDirection('left');
     setActiveTab(Tab.CLASSES);
   };
@@ -121,6 +130,8 @@ const App: React.FC = () => {
         body: JSON.stringify({ password: passwordInput }),
       });
       if (!response.ok) throw new Error('Incorrect password');
+      const { token } = await response.json().catch(() => ({ token: null }));
+      setAdminToken(typeof token === 'string' ? token : null);
       setIsAuthenticated(true);
       setShowPasswordPrompt(false);
       setDirection('right');
@@ -148,6 +159,7 @@ const App: React.FC = () => {
 
   return (
     <ToastProvider>
+     <MusicProvider songs={data?.songs ?? EMPTY_SONGS}>
       <div id="app-shell" className="min-h-screen bg-surface-0 font-sans text-text-hi flex flex-col">
         {/* Header — slim on mobile: logo (secret triple-tap) + page title */}
         <header
@@ -202,7 +214,16 @@ const App: React.FC = () => {
                 <MediaView videos={data.videos} songs={data.songs} />
               )}
               {activeTab === Tab.ANNOUNCEMENTS && (
-                <AnnouncementsView announcements={data.announcements} isAdmin={isAuthenticated} />
+                <React.Suspense
+                  fallback={
+                    <div className="flex items-center gap-3 py-6 text-text-mid">
+                      <DancingDots label="Loading news" />
+                      <span>Loading studio news…</span>
+                    </div>
+                  }
+                >
+                  <AnnouncementsView announcements={data.announcements} isAdmin={isAuthenticated} adminToken={adminToken} />
+                </React.Suspense>
               )}
               {activeTab === Tab.CALCULATOR && isAuthenticated && (
                 <>
@@ -221,7 +242,8 @@ const App: React.FC = () => {
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-line/60 py-8 pb-[calc(112px+env(safe-area-inset-bottom,0px))] md:pb-8">
+        {/* bottom padding clears the floating nav, music player and chat bar */}
+        <footer className="border-t border-line/60 pt-8 pb-[calc(var(--nav-h)+var(--dock-h)+var(--chat-h)+24px)]">
           <div className="mx-auto max-w-5xl px-4 text-center text-[14px] text-text-lo">
             <p>© {new Date().getFullYear()} Dance Class Companion · Master the basics. Dance your story.</p>
             <p className="mt-2">
@@ -269,6 +291,7 @@ const App: React.FC = () => {
           </div>
         </form>
       </BottomSheet>
+     </MusicProvider>
     </ToastProvider>
   );
 };

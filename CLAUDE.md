@@ -1,6 +1,6 @@
 # Dance Class Companion
 
-React 19 + Vite + Tailwind v4 web app (danceclasscompanion.com), deployed to Netlify from `main` and wrapped with Capacitor for Android/iOS. Content comes from Google Sheets (`services/`), AI pattern explanations go through `netlify/functions/gemini.mts`, admin login through `netlify/functions/verify-admin.mts`.
+React 19 + Vite + Tailwind v4 web app (danceclasscompanion.com), deployed to Netlify from `main` and wrapped with Capacitor for Android/iOS. Content comes from Google Sheets (`services/`), songs play in-app through the YouTube IFrame API (`components/music/`), admin login through `netlify/functions/verify-admin.mts`.
 
 - `main` auto-deploys to production and is used for live classes: do UI work on a branch and open a PR.
 - Run `npm run build` before pushing.

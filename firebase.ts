@@ -4,7 +4,7 @@
 // security rules (firestore.rules), not by keeping this config secret.
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -17,4 +17,11 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+// Local dev: VITE_FIRESTORE_EMULATOR=host:port points the app at the Firestore emulator.
+const emulator = import.meta.env.VITE_FIRESTORE_EMULATOR as string | undefined;
+if (emulator) {
+  const [host, port] = emulator.split(':');
+  connectFirestoreEmulator(db, host, Number(port));
+}
 export const auth = getAuth(app);

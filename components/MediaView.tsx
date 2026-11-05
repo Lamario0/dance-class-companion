@@ -2,10 +2,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { VideoItem, SongItem } from '../types';
 import { VideoFacade } from './YouTubeEmbed';
-import { getYouTubeThumb, isPlaylistUrl } from './ui/youtube';
+import { getYouTubeThumb, getYouTubeId, isPlaylistUrl } from './ui/youtube';
 import { Segmented } from './ui/Segmented';
 import { EmptyState, NoteDoodle } from './ui/Doodles';
-import { Search, X, ListVideo, ExternalLink, Flame, Music2, Headphones } from 'lucide-react';
+import { useMusic, songsForCategory, EqBars } from './music/MusicPlayer';
+import { Search, X, ListVideo, ExternalLink, Flame, Music2, Headphones, Play, Shuffle } from 'lucide-react';
 
 interface MediaViewProps {
   videos: VideoItem[];
@@ -49,8 +50,9 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
     return q ? tutorials.filter(t => t.title.toLowerCase().includes(q)) : tutorials;
   }, [tutorials, query]);
 
-  // getSongsByCategory now allows up to 5 as per user request
-  const getSongsByCategory = (cat: string) => songs.filter(s => s.category === cat).slice(0, 5);
+  const music = useMusic();
+  // Load the YouTube player while the user browses, so the first tap on a song plays straight away.
+  useEffect(() => { music.prepare(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-10">
@@ -157,7 +159,7 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <p className="py-6 text-text-lo">No tutorials match “{query}”.</p>
+                  <p className="py-6 text-text-lo">No tutorials match â€œ{query}â€.</p>
                 )}
               </div>
             )}
@@ -177,8 +179,18 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
 
       {/* ---------------- Songs ---------------- */}
       <section aria-labelledby="songs-title">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 id="songs-title" className="text-2xl font-extrabold tracking-tight">Music</h2>
+          {music.playlists.some(p => p.id === 'all') && (
+            <div className="flex gap-2">
+              <button type="button" onClick={() => music.play('all', undefined, { shuffle: false })} className="btn-secondary press !min-h-11 !px-4 text-[15px]">
+                <Play className="h-4 w-4 fill-current" /> Play all
+              </button>
+              <button type="button" onClick={() => music.play('all', undefined, { shuffle: true })} className="btn-secondary press !min-h-11 !px-4 text-[15px]">
+                <Shuffle className="h-4 w-4" /> Shuffle
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Mobile: one list at a time */}
@@ -192,7 +204,7 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
             className="mb-4"
           />
           <div id="songs-panel" role="tabpanel" aria-labelledby={`songs-tab-${songTab}`} key={songTab} className="card animate-fade">
-            <SongList songs={getSongsByCategory(songTab)} />
+            <SongList songs={songsForCategory(songs, songTab)} listId={songTab} />
           </div>
         </div>
 
@@ -200,10 +212,24 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
         <div className="hidden md:grid md:grid-cols-3 md:gap-6 md:items-start">
           {CATEGORIES.map(c => (
             <div key={c.value} className="card">
-              <h3 className={`flex items-center gap-2 px-5 pt-5 pb-2 text-[15px] font-bold ${c.text}`}>
-                {c.icon} {c.label === 'New' ? 'New music' : c.label}
-              </h3>
-              <SongList songs={getSongsByCategory(c.value)} />
+              <div className="flex items-center justify-between gap-2 pl-5 pr-2 pt-3 pb-1">
+                <h3 className={`flex items-center gap-2 text-[15px] font-bold ${c.text}`}>
+                  {c.icon} {c.label === 'New' ? 'New music' : c.label}
+                </h3>
+                {music.playlists.some(p => p.id === c.value) && (
+                  <button
+                    type="button"
+                    onClick={() => music.play(c.value, undefined, { shuffle: false })}
+                    aria-label={`Play ${c.label} playlist`}
+                    data-tip={`Play ${c.label}`}
+                    data-tip-align="end"
+                    className="tip press grid h-11 w-11 place-items-center rounded-full text-text-mid hover:bg-surface-2 hover:text-text-hi"
+                  >
+                    <Play className="h-4 w-4 fill-current" />
+                  </button>
+                )}
+              </div>
+              <SongList songs={songsForCategory(songs, c.value)} listId={c.value} />
             </div>
           ))}
         </div>
@@ -212,37 +238,59 @@ export const MediaView: React.FC<MediaViewProps> = ({ videos, songs }) => {
   );
 };
 
-const SourceBadge: React.FC<{ url: string }> = ({ url }) => {
-  if (url.includes('spotify.com'))
-    return <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[12px] font-semibold text-emerald-300 ring-1 ring-emerald-500/30">Spotify</span>;
-  if (url.includes('youtube.com') || url.includes('youtu.be'))
-    return <span className="rounded-full bg-rose-500/15 px-2.5 py-1 text-[12px] font-semibold text-rose-300 ring-1 ring-rose-500/30">YouTube</span>;
-  return <ExternalLink className="h-4 w-4 text-text-lo" aria-label="Open link" />;
-};
+const SongList: React.FC<{ songs: SongItem[]; listId: string }> = ({ songs, listId }) => {
+  const music = useMusic();
+  if (!songs.length)
+    return (
+      <div className="flex flex-col items-center px-4 py-8 text-center">
+        <NoteDoodle className="mb-3 h-9 w-9 text-brand-soft/70" />
+        <p className="text-text-mid">No songs here yet — check back after class.</p>
+      </div>
+    );
 
-const SongList: React.FC<{ songs: SongItem[] }> = ({ songs }) =>
-  songs.length > 0 ? (
+  return (
     <ul className="stagger divide-y divide-line px-2 py-1">
-      {songs.map((s, i) => (
-        <li key={s.id} style={{ ['--i' as any]: i }}>
-          <a
-            href={s.url || undefined}
-            target="_blank"
-            rel="noopener"
-            className="press flex min-h-[60px] items-center justify-between gap-3 rounded-sm px-3 py-2.5 hover:bg-surface-2 active:bg-surface-2"
-          >
-            <span className="min-w-0">
-              <span className="block truncate font-semibold text-text-hi">{s.title}</span>
+      {songs.map((s, i) => {
+        const playable = !!getYouTubeId(s.url);
+        const isCurrent = music.current?.id === s.id;
+        const inner = (
+          <>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-2 text-text-mid">
+              {isCurrent ? (
+                <EqBars playing={music.isPlaying} />
+              ) : playable ? (
+                <Play className="ml-0.5 h-4 w-4 fill-current" />
+              ) : (
+                <ExternalLink className="h-4 w-4" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className={`block truncate font-semibold ${isCurrent ? 'text-accent' : 'text-text-hi'}`}>{s.title}</span>
               <span className="block truncate text-[14px] text-text-lo">{s.artist}</span>
             </span>
-            {s.url && <SourceBadge url={s.url} />}
-          </a>
-        </li>
-      ))}
+          </>
+        );
+        const cls = 'press flex min-h-[60px] w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left hover:bg-surface-2 active:bg-surface-2';
+        return (
+          <li key={s.id} style={{ ['--i' as any]: i }}>
+            {playable ? (
+              <button
+                type="button"
+                className={cls}
+                aria-label={isCurrent ? `${s.title} (now playing) — ${music.isPlaying ? 'pause' : 'play'}` : `Play ${s.title} by ${s.artist}`}
+                onClick={() => (isCurrent ? music.toggle() : music.play(listId, s.id))}
+              >
+                {inner}
+              </button>
+            ) : (
+              // Non-YouTube links (e.g. Spotify) can't play in-app, so they still open outside.
+              <a href={s.url || undefined} target="_blank" rel="noopener" className={cls}>
+                {inner}
+              </a>
+            )}
+          </li>
+        );
+      })}
     </ul>
-  ) : (
-    <div className="flex flex-col items-center px-4 py-8 text-center">
-      <NoteDoodle className="mb-3 h-9 w-9 text-brand-soft/70" />
-      <p className="text-text-mid">No songs here yet — check back after class.</p>
-    </div>
   );
+};

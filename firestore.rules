@@ -2,6 +2,37 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Community chat (services/chatService.ts).
+    // Anyone can read and post. Nobody can edit or delete from a browser:
+    // instructors do that through /api/chat-moderate (Admin SDK bypasses rules).
+    // Old quarters are removed by a TTL policy on `expireAt`.
+    match /chatMessages/{messageId} {
+      allow read: if true;
+
+      allow create: if isValidMessage(request.resource.data);
+      allow update, delete: if false;
+
+      function isValidMessage(m) {
+        return m.keys().hasOnly(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt'])
+          && m.keys().hasAll(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt'])
+          && m.author is string && m.author.trim().size() > 0 && m.author.size() <= 40
+          // "Studio Admin" is reserved for instructor posts
+          && m.author.trim().lower() != 'studio admin'
+          && m.text is string && m.text.trim().size() > 0 && m.text.size() <= 1000
+          && (m.parentId == null
+              || (m.parentId is string
+                  && exists(/databases/$(database)/documents/chatMessages/$(m.parentId))))
+          && m.quarter is string && m.quarter.matches('^[0-9]{4}-Q[1-4]$')
+          && m.createdAt == request.time
+          // expires at the start of next quarter: always in the future, never more than ~3 months out
+          && m.expireAt is timestamp
+          && m.expireAt > request.time
+          && m.expireAt <= request.time + duration.value(93, 'd');
+      }
+    }
+
+    // Everything else stays locked.
     match /{document=**} {
       allow read, write: if false;
     }
