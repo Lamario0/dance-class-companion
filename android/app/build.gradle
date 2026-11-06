@@ -13,7 +13,8 @@ android {
         applicationId "com.danceclasscompanion.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
+        // Play Console already has codes up to at least 3; 10 leaves clear headroom.
+        versionCode 10
         versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
