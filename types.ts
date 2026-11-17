@@ -44,7 +44,11 @@ export enum Tab {
   CALCULATOR = 'CALCULATOR',
   /** reached from the left menu, not nav tabs */
   NOTES = 'NOTES',
-  STUDENTS = 'STUDENTS'
+  STUDENTS = 'STUDENTS',
+  SLOTS = 'SLOTS',
+  ATTENDANCE = 'ATTENDANCE',
+  /** the screen a class QR opens (/checkin/<slotId>) */
+  CHECKIN = 'CHECKIN'
 }
 
 export interface AIResponse {

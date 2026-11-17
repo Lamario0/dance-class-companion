@@ -13,6 +13,13 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Main bundle limit raised from 320 to 330 kB.
 - Guardrails added: ask before editing the calculator files and before `firebase deploy`.
 
+## 2026-11-17 - Attendance slice 1 build notes
+
+- Known limitation (follows from "static, always open"): anyone with a slot's link (a photo of the poster, a shared link) can check in from anywhere. Still once per slot per day, and only for verified accounts. Revisit if it's abused (e.g. a rotating code or an admin review in slice 2).
+- The check-in, Class slots and My attendance pages don't wait for the Google Sheets class data, so a scan works even when the sheet is slow or down.
+- After a check-in the address bar goes back to `/`, so reloading doesn't re-run the check-in.
+- `scripts/seed-emulator.mjs` makes local emulator test accounts (admin, student, unverified); it never touches the live project.
+
 ## 2026-11-17 - Accounts kickoff
 
 - Roles are only **student** and **admin**; no instructor role. Admin is a Firebase custom claim, first granted to lamariow@gmail.com by script; admins can grant others (slice 4).

@@ -163,6 +163,44 @@ service cloud.firestore {
       }
     }
 
+    // Attendance (docs/spec.md). Class slots: anyone can read (a QR's landing
+    // screen shows the slot before sign-in); only verified admins create/edit;
+    // slots are archived, never deleted (old check-ins point at them).
+    match /slots/{slotId} {
+      allow read: if true;
+      allow create: if isVerifiedAdmin()
+        && request.resource.data.keys().hasOnly(['label', 'title', 'archived', 'createdAt'])
+        && request.resource.data.keys().hasAll(['label', 'title', 'archived', 'createdAt'])
+        && isSlotText(request.resource.data.label)
+        && isSlotText(request.resource.data.title)
+        && request.resource.data.archived == false
+        && request.resource.data.createdAt == request.time;
+      allow update: if isVerifiedAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['label', 'title', 'archived'])
+        && isSlotText(request.resource.data.label)
+        && isSlotText(request.resource.data.title)
+        && request.resource.data.archived is bool;
+      allow delete: if false;
+
+      function isSlotText(t) {
+        return t is string && t.trim().size() > 0 && t.size() <= 60;
+      }
+    }
+
+    // Check-ins: written only by /api/checkin (Admin SDK). A student reads their
+    // own; admins read all.
+    match /checkins/{checkinId} {
+      allow read: if request.auth != null
+        && (resource.data.uid == request.auth.uid || isVerifiedAdmin());
+      allow write: if false;
+    }
+
+    function isVerifiedAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.get('admin', false) == true;
+    }
+
     // Everything else stays locked.
     match /{document=**} {
       allow read, write: if false;

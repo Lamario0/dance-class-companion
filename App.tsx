@@ -18,18 +18,33 @@ import { MenuButton, SideMenu } from './components/menu/SideMenu';
 import { LeaveGuardProvider } from './components/menu/LeaveGuard';
 import { apiUrl } from './services/platform';
 import { useAndroidBackButton } from './components/menu/backButton';
-import { NotebookPen, Users } from 'lucide-react';
+import { NotebookPen, Users, QrCode, CalendarCheck } from 'lucide-react';
 // The Notes page pulls in Firestore, so it loads on first visit.
 const NotesPage = React.lazy(() => import('./components/notes/NotesUI').then(m => ({ default: m.NotesPage })));
 
 // Admin page: loads on first visit (admins only).
 const StudentsPage = React.lazy(() => import('./components/admin/StudentsPage').then(m => ({ default: m.StudentsPage })));
+// Attendance: all three pull in Firestore (and the slots page the QR library), so they load on first visit.
+const SlotsPage = React.lazy(() => import('./components/admin/SlotsPage').then(m => ({ default: m.SlotsPage })));
+const AttendancePage = React.lazy(() => import('./components/attendance/AttendancePage').then(m => ({ default: m.AttendancePage })));
+const CheckInView = React.lazy(() => import('./components/attendance/CheckInView').then(m => ({ default: m.CheckInView })));
+
+/** Slot id when the page was opened from a class QR (/checkin/<slotId>); '' for a malformed id. */
+const CHECKIN_SLOT = (() => {
+  const m = /^\/checkin\/([^/]*)\/?$/.exec(window.location.pathname);
+  if (!m) return null;
+  return /^[A-Za-z0-9_-]{1,64}$/.test(m[1]) ? m[1] : '';
+})();
 
 /** Header titles for menu pages (they aren't nav tabs). */
 const MENU_PAGES = [
   { tab: Tab.NOTES, label: 'Notes', title: 'My notes', icon: NotebookPen },
   { tab: Tab.STUDENTS, label: 'Students', title: 'Students & roles', icon: Users },
+  { tab: Tab.SLOTS, label: 'Slots', title: 'Class slots', icon: QrCode },
+  { tab: Tab.ATTENDANCE, label: 'Attendance', title: 'My attendance', icon: CalendarCheck },
+  { tab: Tab.CHECKIN, label: 'Check in', title: 'Check in', icon: CalendarCheck },
 ];
+const MENU_TABS = MENU_PAGES.map(p => p.tab);
 
 /**
  * Lives inside AuthProvider (App itself sits above it): leaves a menu page when
@@ -39,7 +54,9 @@ const LeaveMenuPageWhenNotAllowed: React.FC<{ tab: Tab; onLeave: () => void }> =
   const { user, loading, isAdmin } = useAccount();
   useEffect(() => {
     if (loading) return;
-    if ((tab === Tab.NOTES && !user) || (tab === Tab.STUDENTS && (!user || !isAdmin))) onLeave();
+    const needsUser = tab === Tab.NOTES || tab === Tab.ATTENDANCE;
+    const needsAdmin = tab === Tab.STUDENTS || tab === Tab.SLOTS;
+    if ((needsUser && !user) || (needsAdmin && (!user || !isAdmin))) onLeave();
   }, [tab, loading, user, isAdmin, onLeave]);
   return null;
 };
@@ -84,7 +101,13 @@ const LoadingSkeleton: React.FC = () => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>(Tab.CLASSES);
+  const [activeTab, setActiveTab] = useState<Tab>(CHECKIN_SLOT !== null ? Tab.CHECKIN : Tab.CLASSES);
+  // Leaving the check-in screen drops /checkin/<id> from the address bar, so a reload doesn't check in again.
+  useEffect(() => {
+    if (activeTab !== Tab.CHECKIN && window.location.pathname.startsWith('/checkin/')) {
+      window.history.replaceState(null, '', '/');
+    }
+  }, [activeTab]);
   const [direction, setDirection] = useState<'left' | 'right'>('right');
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,6 +164,8 @@ const App: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const openAccount = useCallback(() => setAccountOpen(true), []);
+  const closeAccount = useCallback(() => setAccountOpen(false), []);
   useAndroidBackButton(menuOpen, closeMenu);
 
   const navigateTo = (tab: Tab) => {
@@ -150,7 +175,7 @@ const App: React.FC = () => {
       return;
     }
     guardLeave(() => {
-      setDirection(tab === Tab.NOTES || tab === Tab.STUDENTS || tabIndex(tab) >= tabIndex(activeTab) ? 'right' : 'left');
+      setDirection(MENU_TABS.includes(tab) || tabIndex(tab) >= tabIndex(activeTab) ? 'right' : 'left');
       setActiveTab(tab);
       window.scrollTo({ top: 0 });
     });
@@ -216,6 +241,8 @@ const App: React.FC = () => {
 
   const videoOfMonth = data?.videos.find(v => v.category === 'month');
   // fetchSheetData resolves to empty lists when the sheet can't be reached.
+  // Attendance pages don't use the Sheets content: a QR scan must work even if the class data is slow or down.
+  const sheetFree = activeTab === Tab.CHECKIN || activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE;
   const loadFailed =
     !!data && !data.classes.length && !data.videos.length && !data.songs.length && !data.announcements.length;
   const current = navItems.find(i => i.tab === activeTab) ?? MENU_PAGES.find(p => p.tab === activeTab) ?? BASE_NAV[0];
@@ -260,9 +287,9 @@ const App: React.FC = () => {
 
         {/* Main Content */}
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 md:pt-10 pb-10 md:pb-16">
-          {loading ? (
+          {loading && !sheetFree ? (
             <LoadingSkeleton />
-          ) : !data || loadFailed ? (
+          ) : (!data || loadFailed) && !sheetFree ? (
             <div className="card mx-auto max-w-md">
               <EmptyState
                 doodle="feet"
@@ -306,6 +333,27 @@ const App: React.FC = () => {
                   }
                 >
                   <StudentsPage />
+                </React.Suspense>
+              )}
+              {(activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CHECKIN) && (
+                <React.Suspense
+                  fallback={
+                    <div className="flex items-center gap-3 py-6 text-text-mid">
+                      <DancingDots label="Loading" />
+                      <span>Loading…</span>
+                    </div>
+                  }
+                >
+                  {activeTab === Tab.SLOTS && <SlotsPage />}
+                  {activeTab === Tab.ATTENDANCE && <AttendancePage />}
+                  {activeTab === Tab.CHECKIN && (
+                    <CheckInView
+                      slotId={CHECKIN_SLOT || null}
+                      onOpenAccount={openAccount}
+                      onCloseAccount={closeAccount}
+                      onDone={() => navigateTo(Tab.CLASSES)}
+                    />
+                  )}
                 </React.Suspense>
               )}
               {activeTab === Tab.ANNOUNCEMENTS && (
@@ -394,6 +442,8 @@ const App: React.FC = () => {
         returnFocusTo={menuButtonRef}
         onNotes={() => { setMenuOpen(false); navigateTo(Tab.NOTES); }}
         onStudents={() => { setMenuOpen(false); navigateTo(Tab.STUDENTS); }}
+        onSlots={() => { setMenuOpen(false); navigateTo(Tab.SLOTS); }}
+        onAttendance={() => { setMenuOpen(false); navigateTo(Tab.ATTENDANCE); }}
         // Focus the hamburger first, so the account sheet returns focus there (not to the gone drawer item).
         onAccount={() => { menuButtonRef.current?.focus(); setMenuOpen(false); setAccountOpen(true); }}
       />
