@@ -1,0 +1,18 @@
+{
+  "_help": "Rules enforced by .claude/hooks/guard.mjs before a tool runs. 'never' blocks, 'ask' makes the user confirm. paths: globs relative to the project root ('secrets/' = that folder, '.env*' = any depth, '**/*.pem'); also absolute or ~/ paths. commands: case-insensitive regexes tested against Bash and PowerShell commands. Test a rule: node .claude/hooks/guard.mjs --check Write some/path",
+  "_rules": "Chosen 2026-11-17: ask before pushing/merging to main (auto-deploys the live site used in classes) and before any force push; ask before recursive deletes.",
+  "never": {
+    "paths": [],
+    "commands": []
+  },
+  "ask": {
+    "paths": [],
+    "commands": [
+      "git\\s+push\\b.*\\bmain\\b",
+      "git\\s+push\\b.*(--force|\\s-f\\b)",
+      "gh\\s+pr\\s+merge\\b",
+      "rm\\s+-[a-z]*r[a-z]*\\s",
+      "Remove-Item\\b.*-Recurse"
+    ]
+  }
+}
