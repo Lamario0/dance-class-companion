@@ -141,7 +141,7 @@ const App: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
-  useAndroidBackButton();
+  useAndroidBackButton(menuOpen, closeMenu);
 
   const navigateTo = (tab: Tab) => {
     // We allow navigation without logging out the admin
