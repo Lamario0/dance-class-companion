@@ -29,7 +29,7 @@ Only the current slice is specced. Later ones are specced when reached.
 
 | # | Slice | State |
 |---|---|---|
-| 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | specced below |
+| 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | done 2026-11-17 (PR #2) |
 | 2 | Notes: "my notes" on each class card + a free notebook, private to each student | not specced |
 | 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | not specced |
 | 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email | not specced |
@@ -97,6 +97,18 @@ Each line is pass/fail and names its check.
 | 10 | Lamarr's account shows "Admin" after the one-time script; other accounts don't | emulator, then deploy preview (user looks) |
 | 11 | `npm run build` passes and the main bundle stays under 320 kB (Auth loads lazily) | build output |
 | 12 | Works on a 375px-wide screen with 44px tap targets and the existing design tokens | browser preview at 375px |
+
+### Result (2026-11-17)
+
+All criteria met.
+- 1, 2, 4, 6, 7, 12: browser preview against the emulators (375px and desktop).
+- 3, 5, 5b: emulator, then confirmed by Lamarr on the deploy preview against the live project (real Google sign-in, real verification and reset emails).
+- 8: emulator test + UI run, then a real delete on the deploy preview.
+- 9: 15 rules tests (17 tests total) pass; live rules spot-checked (profiles 403 signed out, chat 200).
+- 10: emulator via `set-admin.mjs`; lamariow@gmail.com made admin on the live project, badge confirmed.
+- 11: main bundle 298 kB.
+- Second check: fresh-context reviewer found a profile-creation race, stale watcher updates, delete error handling, an emulator-mode risk and a stuck loading state; all fixed and re-tested.
+- Found on the deploy preview: firebase-admin 14 crashed Netlify functions (jwks-rsa 4 -> ESM-only jose 6); pinned firebase-admin 13.
 
 ### Reference to match
 

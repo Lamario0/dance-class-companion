@@ -23,6 +23,10 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Server functions only use the emulators with an explicit local opt-in (`DCC_USE_EMULATORS=1`) and never inside Netlify.
 - Google's redirect fallback needs authDomain on our own domain: proxy rules are in `netlify.toml`; switching on needs `VITE_FIREBASE_AUTH_DOMAIN=danceclasscompanion.com` in Netlify plus the OAuth redirect URI (user action, pending). The popup path works without it.
 
+- Stay on firebase-admin 13 (jwks-rsa 3 / jose 4). firebase-admin 14 breaks Netlify functions that verify tokens; `NODE_VERSION` in netlify.toml does not change the functions runtime. Revisit only after checking the Netlify functions Node version.
+- Firebase project: the app's project is display name "dance class companion", ID `dance-class-companion`. The project displayed as "dance-class-companion" (ID `gen-lang-client-0566172369`) is the old AI Studio/Gemini project and is not used.
+- lamariow@gmail.com has the admin claim on the live project (2026-11-17).
+
 ## Earlier (redesign and chat, Nov 2026)
 
 - Chat stored in Firestore `chatMessages`, current quarter only, deleted by a TTL policy on `expireAt` (Blaze billing enabled 2026-11-05).
