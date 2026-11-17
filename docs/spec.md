@@ -32,9 +32,65 @@ Only the current slice is specced. Later ones are specced when reached.
 | 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | done 2026-11-17 (PR #2) |
 | 2 | Notes: "my notes" on each class card + a free notebook, private to each student | done 2026-11-17 (PR #3) |
 | 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | done 2026-11-17 (PR #4) |
-| 3.5 | Left menu: hamburger drawer for signed-in users; notes move to a full Notes page; Admin section placeholder | specced below |
-| 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email (lives in the left menu's Admin section) | not specced |
+| 3.5 | Left menu: hamburger drawer for signed-in users; notes move to a full Notes page; Admin section placeholder | done 2026-11-17 (PR #6) |
+| 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email (lives in the left menu's Admin section) | specced below |
 | 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | not specced |
+
+---
+
+## Slice 4 - Students & roles (admin screen)
+
+### What it does
+
+- In the left menu's **Admin** section, **Students & roles** opens a full page
+  (like Notes; admins only).
+- It lists every account: **name**, **email**, **joined**, **last sign-in**,
+  **sign-in method** (Google / email) and whether the email is **verified**,
+  with an **Admin** badge on admins. A search box filters by name or email;
+  newest first.
+- Each row has **Make admin** / **Remove admin**. Your own row can't lose
+  admin here. The change takes effect for that person on their next page load
+  (their sessions are refreshed so it can't linger).
+- Each row (except your own) has **Delete account**, behind a confirm step that
+  names the student. It does exactly what self-deletion does: login, profile
+  and notes removed; chat messages become "Former student".
+- Non-admins can't open the page or call its server functions (the server
+  checks the admin role on every request, never the UI).
+
+### Confirmed decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Columns | Name, email, joined, last sign-in, sign-in method + verified, admin badge | User choice; notes stay private (no counts) |
+| Actions | Make/remove admin; delete a student's account | User choice |
+| Self-protection | Your own row can't remove admin or be deleted from this screen | User choice: no accidental lock-out |
+| Where it runs | Netlify functions with the Admin SDK: `/api/admin/users` (list), `/api/admin/role`, `/api/admin/delete-user`; each verifies the caller's ID token has `admin: true` | Emails and claims live in Firebase Auth, which only the Admin SDK can read |
+| Role changes | Set/clear the custom claim and revoke the person's refresh tokens so it applies on their next load | Slice 1 rule: admin power comes from the claim |
+| Deleting a student | Shares the self-delete code path (profile + notes, relabel chat, delete login) | One behaviour, already tested |
+| Page | Full page from the menu (not a nav tab), lazy-loaded | Same pattern as Notes |
+| Out of scope | Resending verification, viewing notes, editing names, bulk actions, attendance | User choice / later project |
+
+### Done means
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | Admins see Students & roles in the menu and it opens the page; non-admins don't see it | browser preview |
+| 2 | The page lists all accounts with name, email, joined, last sign-in, method, verified and admin badge; search filters by name/email | browser preview against the emulators (several seeded accounts) |
+| 3 | Make admin gives that account the Admin badge and, on its next load, admin powers (e.g. chat moderation) | browser preview + emulator claim check |
+| 4 | Remove admin takes it away the same way; your own row can't remove admin | browser preview |
+| 5 | Delete account (after a confirm naming the student) removes the login, profile and notes and relabels their chat; your own row can't be deleted | function test against the emulators + browser |
+| 6 | Every admin function refuses a missing token, a non-admin token and an unverified token (401/403), and refuses acting on yourself where blocked | function tests against the emulators |
+| 7 | `npm run build` passes; main bundle under 320 kB (admin page lazy-loaded) | build output |
+| 8 | Works at 375px and desktop; 44px tap targets; long emails don't overflow | browser preview |
+
+### Reference to match
+
+`components/notes/NotesUI.tsx` (`NotesPage` layout) and the slice 3.5 menu;
+`netlify/functions/delete-account.mts` for the delete path.
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff.
 
 ---
 
