@@ -34,7 +34,66 @@ Only the current slice is specced. Later ones are specced when reached.
 | 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | done 2026-11-17 (PR #4) |
 | 3.5 | Left menu: hamburger drawer for signed-in users; notes move to a full Notes page; Admin section placeholder | done 2026-11-17 (PR #6) |
 | 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email (lives in the left menu's Admin section) | specced below |
-| 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | not specced |
+| 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | specced below |
+
+---
+
+## Slice 5 - Android app
+
+### What it does
+
+- The Android app (1.2.0) gets everything from slices 1-4: accounts, notes,
+  chat identity, the left menu and the admin page.
+- **Continue with Google** in the app opens the native Android account picker
+  (no browser popup). Email sign-up, verification and password reset work as on
+  the website (the emailed links open in the browser; the app picks up
+  verification via "I've verified").
+- **Server calls work in the app:** delete account, the admin page and the
+  calculator's passcode login reach `https://danceclasscompanion.com/api/*`
+  from the app (today they fail because the app has no `/api`).
+- **Back button:** closes an open sheet or the left menu; otherwise exits the
+  app (Android's default).
+- Released as **versionCode 11 / 1.2.0** to Play's **internal testing** track
+  first; promoted to production after Lamarr tries it.
+
+### Confirmed decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Google sign-in in the app | Native account picker via a Capacitor Firebase Authentication plugin, then signed into the web Firebase SDK with the returned credential | User choice; popups/redirects don't work reliably in an app WebView |
+| Fingerprints | Add the upload key's SHA-1/SHA-256 (`dcc-release-key`) and Play's app-signing key SHA-1/SHA-256 (from Play Console) to the Firebase Android app; refresh `google-services.json` | Required for native Google sign-in; the Play one is what installed apps are signed with |
+| API calls from the app | Absolute base URL `https://danceclasscompanion.com` when running natively; the functions answer CORS for the app's origin only (`https://localhost`, `capacitor://localhost`) | Keeps the website unchanged and the API closed to other sites |
+| Back button | Close the top sheet/menu, otherwise exit | User choice |
+| Release | versionCode 11, versionName 1.2.0, signed with `dcc-release-key`, internal testing first | User choice; above the last used code (10) |
+| Out of scope | iOS, Apple sign-in, push notifications, deep links for email links | Later |
+
+### Done means
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | On the website nothing changes (Google popup sign-in, API calls same-origin) | browser preview + build |
+| 2 | Native Google sign-in signs into the app and creates/loads the profile | Lamarr on a phone (internal testing) |
+| 3 | Email sign-up, verification ("I've verified") and sign-in work in the app | Lamarr on a phone |
+| 4 | Delete account, the admin page and calculator login work from the app (API reachable, CORS allowed for the app origin) | Lamarr on a phone; CORS checked with curl against the deploy preview |
+| 5 | The API refuses CORS for any other website origin | curl against the deploy preview |
+| 6 | Back button closes an open sheet / the menu; otherwise exits | Lamarr on a phone |
+| 7 | Notes, chat (member post/edit/delete) and offline notes work in the app | Lamarr on a phone |
+| 8 | The signed AAB is versionCode 11 / 1.2.0, signed with `dcc-release-key`, and accepted by Play internal testing | apksigner/jarsigner + Play Console |
+| 9 | `npm run build` passes; the website's main bundle stays under 320 kB (native plugin code not loaded on the web) | build output |
+
+### Reference to match
+
+The 1.1.0 release process (CLAUDE.md "Android" and docs/decisions.md);
+the website's current behaviour for every account feature.
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff.
+
+### Open questions
+
+- Lamarr: copy the **App signing key certificate** SHA-1 and SHA-256 from Play
+  Console → Test and release → App integrity, before criterion 2 can pass.
 
 ---
 
