@@ -26,7 +26,9 @@ interface NavProps {
 /** Mobile (< md): floating pill tab bar with a springy sliding indicator. */
 export const BottomTabBar: React.FC<NavProps> = ({ items, active, onChange }) => {
   const sheetOpen = useAnySheetOpen();
-  const index = Math.max(0, items.findIndex(i => i.tab === active));
+  // -1 on pages that aren't tabs (e.g. Notes from the left menu): no indicator.
+  const found = items.findIndex(i => i.tab === active);
+  const index = Math.max(0, found);
   return (
     <nav
       aria-label="Main"
@@ -42,7 +44,7 @@ export const BottomTabBar: React.FC<NavProps> = ({ items, active, onChange }) =>
       >
         <span
           aria-hidden="true"
-          className="absolute top-1.5 bottom-1.5 left-1.5 rounded-full bg-brand-strong/25 ring-1 ring-brand/40 transition-transform duration-[460ms] ease-[var(--ease-spring)]"
+          className={`absolute top-1.5 bottom-1.5 left-1.5 rounded-full bg-brand-strong/25 ring-1 ring-brand/40 transition-[transform,opacity] duration-[460ms] ease-[var(--ease-spring)] ${found < 0 ? 'opacity-0' : ''}`}
           style={{ width: `calc((100% - 0.75rem) / ${items.length})`, transform: `translateX(${index * 100}%)` }}
         />
         {items.map(item => {
@@ -71,7 +73,8 @@ export const BottomTabBar: React.FC<NavProps> = ({ items, active, onChange }) =>
 
 /** Desktop (≥ md): top nav using the same tokens and sliding indicator. */
 export const TopNav: React.FC<NavProps> = ({ items, active, onChange }) => {
-  const index = Math.max(0, items.findIndex(i => i.tab === active));
+  const found = items.findIndex(i => i.tab === active);
+  const index = Math.max(0, found);
   return (
     <nav aria-label="Main" className="hidden md:block">
       <div
@@ -81,7 +84,7 @@ export const TopNav: React.FC<NavProps> = ({ items, active, onChange }) => {
       >
         <span
           aria-hidden="true"
-          className="absolute top-1 bottom-1 left-1 w-[7.5rem] rounded-full bg-surface-2 ring-1 ring-white/5 transition-transform duration-[460ms] ease-[var(--ease-spring)]"
+          className={`absolute top-1 bottom-1 left-1 w-[7.5rem] rounded-full bg-surface-2 ring-1 ring-white/5 transition-[transform,opacity] duration-[460ms] ease-[var(--ease-spring)] ${found < 0 ? 'opacity-0' : ''}`}
           style={{ transform: `translateX(${index * 100}%)` }}
         />
         {items.map(item => {

@@ -13,6 +13,24 @@ import { BottomTabBar, TopNav, BASE_NAV, ADMIN_NAV } from './components/Navigati
 import { MusicProvider } from './components/music/MusicPlayer';
 import { AuthProvider } from './components/auth/AuthProvider';
 import { AccountButton, AccountSheet } from './components/auth/AccountSheet';
+import { useAccount } from './components/auth/AuthProvider';
+import { MenuButton, SideMenu } from './components/menu/SideMenu';
+import { LeaveGuardProvider } from './components/menu/LeaveGuard';
+import { NotebookPen } from 'lucide-react';
+// The Notes page pulls in Firestore, so it loads on first visit.
+const NotesPage = React.lazy(() => import('./components/notes/NotesUI').then(m => ({ default: m.NotesPage })));
+
+/** Title for the header while on the Notes page (it isn't a nav tab). */
+const NOTES_ITEM = { tab: Tab.NOTES, label: 'Notes', title: 'My notes', icon: NotebookPen };
+
+/** Lives inside AuthProvider (App itself sits above it). */
+const LeaveNotesWhenSignedOut: React.FC<{ active: boolean; onLeave: () => void }> = ({ active, onLeave }) => {
+  const { user, loading } = useAccount();
+  useEffect(() => {
+    if (active && !loading && !user) onLeave();
+  }, [active, loading, user, onLeave]);
+  return null;
+};
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ToastProvider } from './components/ui/Toast';
 import { EmptyState, DancingDots } from './components/ui/Doodles';
@@ -84,15 +102,34 @@ const App: React.FC = () => {
   const navItems = isAuthenticated ? [...BASE_NAV, ADMIN_NAV] : BASE_NAV;
   const tabIndex = (t: Tab) => navItems.findIndex(i => i.tab === t);
 
+  // Leaving the Notes page with unsaved edits asks first (nav tabs, the menu, signing out).
+  const notesDirty = useRef(false);
+  const [pendingLeave, setPendingLeave] = useState<null | (() => void)>(null);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const guardLeave = useCallback((action: () => void) => {
+    if (activeTabRef.current === Tab.NOTES && notesDirty.current) setPendingLeave(() => action);
+    else action();
+  }, []);
+  const setNotesDirty = useCallback((dirty: boolean) => { notesDirty.current = dirty; }, []);
+  const leaveGuard = React.useMemo(() => ({ guardLeave, setNotesDirty }), [guardLeave, setNotesDirty]);
+
+  // Left menu (signed-in users)
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+
   const navigateTo = (tab: Tab) => {
     // We allow navigation without logging out the admin
     if (tab === activeTab) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    setDirection(tabIndex(tab) >= tabIndex(activeTab) ? 'right' : 'left');
-    setActiveTab(tab);
-    window.scrollTo({ top: 0 });
+    guardLeave(() => {
+      setDirection(tab === Tab.NOTES || tabIndex(tab) >= tabIndex(activeTab) ? 'right' : 'left');
+      setActiveTab(tab);
+      window.scrollTo({ top: 0 });
+    });
   };
 
   const handleLogout = () => {
@@ -154,12 +191,15 @@ const App: React.FC = () => {
   // fetchSheetData resolves to empty lists when the sheet can't be reached.
   const loadFailed =
     !!data && !data.classes.length && !data.videos.length && !data.songs.length && !data.announcements.length;
-  const current = navItems.find(i => i.tab === activeTab) ?? BASE_NAV[0];
+  const current = navItems.find(i => i.tab === activeTab) ?? (activeTab === Tab.NOTES ? NOTES_ITEM : BASE_NAV[0]);
 
   return (
     <ToastProvider>
      <AuthProvider>
+     <LeaveGuardProvider value={leaveGuard}>
      <MusicProvider songs={data?.songs ?? EMPTY_SONGS}>
+      {/* Signing out on the Notes page returns to Classes. */}
+      <LeaveNotesWhenSignedOut active={activeTab === Tab.NOTES} onLeave={() => { notesDirty.current = false; setActiveTab(Tab.CLASSES); }} />
       <div id="app-shell" className="min-h-screen bg-surface-0 font-sans text-text-hi flex flex-col">
         {/* Header — slim on mobile: logo (secret triple-tap) + page title */}
         <header
@@ -168,6 +208,7 @@ const App: React.FC = () => {
         >
           <div className="mx-auto flex h-14 md:h-16 max-w-5xl items-center justify-between gap-4 px-4">
             <div className="flex min-w-0 items-center gap-3">
+              <MenuButton open={menuOpen} onClick={() => setMenuOpen(true)} buttonRef={menuButtonRef} />
               <button
                 type="button"
                 onClick={handleLogoClick}
@@ -215,6 +256,18 @@ const App: React.FC = () => {
               )}
               {activeTab === Tab.MEDIA && (
                 <MediaView videos={data.videos} songs={data.songs} />
+              )}
+              {activeTab === Tab.NOTES && (
+                <React.Suspense
+                  fallback={
+                    <div className="flex items-center gap-3 py-6 text-text-mid">
+                      <DancingDots label="Loading your notes" />
+                      <span>Loading your notes…</span>
+                    </div>
+                  }
+                >
+                  <NotesPage onOpenAccount={() => setAccountOpen(true)} />
+                </React.Suspense>
               )}
               {activeTab === Tab.ANNOUNCEMENTS && (
                 <React.Suspense
@@ -295,7 +348,31 @@ const App: React.FC = () => {
         </form>
       </BottomSheet>
       <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
+
+      <SideMenu
+        open={menuOpen}
+        onClose={closeMenu}
+        returnFocusTo={menuButtonRef}
+        onNotes={() => { setMenuOpen(false); navigateTo(Tab.NOTES); }}
+        onAccount={() => { setMenuOpen(false); setAccountOpen(true); }}
+      />
+
+      {/* "Discard your changes?" when leaving the Notes page with unsaved edits */}
+      <BottomSheet open={pendingLeave !== null} onClose={() => setPendingLeave(null)} title="Discard your changes?" size="sm">
+        <p className="text-text-mid">Your edits to this note haven't been saved.</p>
+        <div className="mt-5 flex gap-3">
+          <button type="button" onClick={() => setPendingLeave(null)} className="btn-primary press flex-1">Keep editing</button>
+          <button
+            type="button"
+            onClick={() => { const action = pendingLeave; notesDirty.current = false; setPendingLeave(null); action?.(); }}
+            className="btn-secondary press flex-1"
+          >
+            Discard
+          </button>
+        </div>
+      </BottomSheet>
      </MusicProvider>
+     </LeaveGuardProvider>
      </AuthProvider>
     </ToastProvider>
   );
