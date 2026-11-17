@@ -66,6 +66,8 @@ test('deletes the login, the profile and everything under it, and nothing else',
   await db.doc(`users/${me.uid}`).set({ displayName: 'Del', createdAt: new Date() });
   await db.doc(`users/${me.uid}/notes/n1`).set({ text: 'my note' });
   await db.doc(`users/${other.uid}`).set({ displayName: 'Keep', createdAt: new Date() });
+  await db.doc('chatMessages/fromDel').set({ author: 'Del', text: 'see you Thursday', uid: me.uid, role: 'member' });
+  await db.doc('chatMessages/fromKeep').set({ author: 'Keep', text: 'me too', uid: other.uid, role: 'member' });
 
   const res = await call(me.idToken);
   assert.equal(res.status, 200);
@@ -73,6 +75,14 @@ test('deletes the login, the profile and everything under it, and nothing else',
   await assert.rejects(adminAuth().getUser(me.uid), /no user record|user-not-found/i);
   assert.equal((await db.doc(`users/${me.uid}`).get()).exists, false);
   assert.equal((await db.doc(`users/${me.uid}/notes/n1`).get()).exists, false);
+
+  // their chat messages stay, relabelled and no longer linked to the account
+  const msg = (await db.doc(`chatMessages/fromDel`).get()).data();
+  assert.equal(msg?.author, 'Former student');
+  assert.equal(msg?.uid, undefined);
+  assert.equal(msg?.role, undefined);
+  assert.equal(msg?.text, 'see you Thursday');
+  assert.equal((await db.doc('chatMessages/fromKeep').get()).data()?.author, 'Keep');
 
   // the other student is untouched
   assert.equal((await adminAuth().getUser(other.uid)).email, 'keep-me@test.dev');

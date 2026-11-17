@@ -6,11 +6,19 @@
 // (the start of the next quarter); a Firestore TTL policy on that field deletes
 // old messages for good.
 //
-// Anyone can read and post (validated by firestore.rules). Editing and deleting
-// are instructor-only and go through the /api/chat-moderate Netlify function.
+// Identity (spec slice 3):
+// - Guests (and unverified accounts) post under any name; no edit/delete.
+// - Members (verified accounts) post with `uid` under their profile name and can
+//   edit or delete their own messages. Deleting one that has replies leaves
+//   "This message was deleted" so the replies stay.
+// - Admins (custom claim) can edit or delete any message.
+// All of this is enforced by firestore.rules.
 import {
   collection,
   addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
   onSnapshot,
   query,
   where,
@@ -20,12 +28,19 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
+export type ChatRole = 'member' | 'admin';
+
 export interface ChatMessage {
   id: string;
   author: string;
   text: string;
   parentId: string | null;
   createdAt: Date | null; // null until the server timestamp lands
+  /** set on members' posts; absent for guests and deleted accounts */
+  uid: string | null;
+  role: ChatRole | null;
+  edited: boolean;
+  deleted: boolean;
 }
 
 export interface ChatThread extends ChatMessage {
@@ -57,9 +72,13 @@ export const subscribeToChat = (
           return {
             id: d.id,
             author: data.author,
-            text: data.text,
+            text: data.text ?? '',
             parentId: data.parentId ?? null,
             createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : null,
+            uid: typeof data.uid === 'string' ? data.uid : null,
+            role: data.role === 'admin' || data.role === 'member' ? data.role : null,
+            edited: !!data.editedAt && !data.deleted,
+            deleted: data.deleted === true,
           };
         }),
       );
@@ -68,7 +87,13 @@ export const subscribeToChat = (
   );
 };
 
-export const postChatMessage = (author: string, text: string, parentId: string | null = null) => {
+/** A member's identity on a post; omit for guests. */
+export interface PostAs {
+  uid: string;
+  role: ChatRole;
+}
+
+export const postChatMessage = (author: string, text: string, parentId: string | null = null, as?: PostAs) => {
   const now = new Date();
   return addDoc(collection(db, COLLECTION), {
     author: author.trim().slice(0, MAX_AUTHOR),
@@ -77,8 +102,22 @@ export const postChatMessage = (author: string, text: string, parentId: string |
     quarter: quarterOf(now),
     createdAt: serverTimestamp(),
     expireAt: Timestamp.fromDate(nextQuarterStart(now)),
+    ...(as ? { uid: as.uid, role: as.role } : {}),
   });
 };
+
+/** Edit a message's text (own message, or any as admin). */
+export const editChatMessage = (id: string, text: string) =>
+  updateDoc(doc(db, COLLECTION, id), { text: text.trim().slice(0, MAX_TEXT), editedAt: serverTimestamp() });
+
+/**
+ * Delete a message (own, or any as admin). With replies it becomes
+ * "This message was deleted" so the conversation under it stays readable.
+ */
+export const deleteChatMessage = (id: string, hasReplies: boolean) =>
+  hasReplies
+    ? updateDoc(doc(db, COLLECTION, id), { text: '', deleted: true, editedAt: serverTimestamp() })
+    : deleteDoc(doc(db, COLLECTION, id));
 
 /** Flat list → threads. Newest top-level first, replies oldest first. */
 export const buildThreads = (messages: ChatMessage[]): ChatThread[] => {
@@ -89,30 +128,20 @@ export const buildThreads = (messages: ChatMessage[]): ChatThread[] => {
     const parent = m.parentId ? byId.get(m.parentId) : undefined;
     if (parent) parent.replies.push(m);
     else if (!m.parentId) roots.push(m);
-    // a reply whose parent was deleted is dropped along with it
+    // a reply whose parent was hard-deleted is dropped along with it
   });
   const t = (m: ChatMessage) => m.createdAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
   const sortReplies = (list: ChatThread[]) => {
     list.sort((a, b) => t(a) - t(b));
     list.forEach(r => sortReplies(r.replies));
   };
-  roots.sort((a, b) => t(b) - t(a));
-  roots.forEach(r => sortReplies(r.replies));
-  return roots;
-};
-
-/** Instructor-only edit/delete through the Netlify function (Admin SDK). */
-export const moderateChat = async (
-  adminToken: string,
-  action: { type: 'edit'; id: string; text: string } | { type: 'delete'; id: string },
-) => {
-  const res = await fetch('/api/chat-moderate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-    body: JSON.stringify(action),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
-  }
+  // A soft-deleted message whose replies are all gone has nothing left to show.
+  const prune = (list: ChatThread[]): ChatThread[] =>
+    list
+      .map(m => ({ ...m, replies: prune(m.replies) }))
+      .filter(m => !m.deleted || m.replies.length > 0);
+  const kept = prune(roots);
+  kept.sort((a, b) => t(b) - t(a));
+  kept.forEach(r => sortReplies(r.replies));
+  return kept;
 };

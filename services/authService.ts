@@ -14,7 +14,7 @@ import {
   signOut as fbSignOut,
   type User,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, getDocs, query, where } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 export const MAX_NAME = 40;
@@ -163,6 +163,16 @@ export const renameAccount = async (name: string) => {
   const displayName = name.trim().slice(0, MAX_NAME);
   await updateDoc(profileRef(u.uid), { displayName });
   await updateProfile(u, { displayName });
+  // Their chat messages show the account name, so follow the rename (rules check it
+  // matches the profile). Best effort: a failure here leaves old names, not a broken account.
+  try {
+    const mine = await getDocs(query(collection(db, 'chatMessages'), where('uid', '==', u.uid)));
+    await Promise.all(
+      mine.docs.filter(d => d.data().author !== displayName).map(d => updateDoc(d.ref, { author: displayName })),
+    );
+  } catch (err) {
+    console.error('Updating your name on chat messages failed', err);
+  }
   await u.getIdToken(true);
 };
 
