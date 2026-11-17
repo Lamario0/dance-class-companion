@@ -32,8 +32,69 @@ Only the current slice is specced. Later ones are specced when reached.
 | 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | done 2026-11-17 (PR #2) |
 | 2 | Notes: "my notes" on each class card + a free notebook, private to each student | done 2026-11-17 (PR #3) |
 | 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | done 2026-11-17 (PR #4) |
-| 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email | not specced |
+| 3.5 | Left menu: hamburger drawer for signed-in users; notes move to a full Notes page; Admin section placeholder | specced below |
+| 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email (lives in the left menu's Admin section) | not specced |
 | 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | not specced |
+
+---
+
+## Slice 3.5 - Left menu
+
+### What it does
+
+- **Signed-in students** get a hamburger button at the far left of the header
+  (before the logo; the logo keeps its triple-tap). Signed out, there is no
+  menu button and the header looks as it does today.
+- The button opens a **drawer from the left** (phone and desktop): their name
+  at the top, then **My notes** and **Account**. Admins also see an **Admin**
+  section with "Students & roles - coming next" (filled in by slice 4).
+- **My notes** closes the drawer and opens a full **Notes page** in the main
+  area: class notes grouped by class, free notes, New note, and the same editor
+  (Save, discard prompt, offline) as today. It's reached only from the menu, so
+  the bottom/top nav keeps its three tabs.
+- **Account** opens the existing account sheet, which no longer contains the
+  notebook (name, sign out, delete account only).
+- The **My notes button on class cards** stays and still opens that class's
+  weekly note sheet.
+- Signing out while on the Notes page returns to Classes.
+
+### Confirmed decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Who sees the menu | Signed-in users only | User choice |
+| Placement | Hamburger at the far left of the header, phone and desktop; account button stays at the right | User choice |
+| My notes | Opens a full Notes page in the main area (not a nav tab) | User choice: room to grow (search, filters later) |
+| Admin section | Admins only; placeholder for slice 4; calculator stays on its triple-tap passcode | User choice |
+| Account sheet | Loses the notebook; keeps name, sign out, delete account | Notes now live on their own page |
+| Drawer behaviour | Slides in from the left over a dimmed backdrop; closes on backdrop tap, Esc, swipe left or choosing an item; focus moves into it and back to the button | Matches the bottom-sheet patterns |
+| Unsaved notes | Leaving the Notes page with unsaved edits asks "Discard your changes?" | Same rule as slice 2 |
+| Out of scope | The student list and roles (slice 4), notes search, other menu items | Keep the slice small |
+
+### Done means
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | Signed out, there is no menu button and the header is unchanged | browser preview |
+| 2 | Signed in, the hamburger shows at the far left; tapping it opens the drawer with the name, My notes and Account | browser preview (375px + desktop) |
+| 3 | The drawer closes on backdrop tap, Esc, swipe left and after choosing an item; keyboard focus moves in and back to the button | browser preview |
+| 4 | My notes opens the Notes page with class notes grouped by class and free notes; New note, edit, delete and Save work as in slice 2 | browser preview against the emulators |
+| 5 | Leaving the Notes page (menu, nav tab, sign out) with unsaved edits asks "Discard your changes?"; Keep editing keeps the text | browser preview |
+| 6 | Account opens the account sheet, which no longer shows the notebook | browser preview |
+| 7 | Only admins see the Admin section, with the slice 4 placeholder | browser preview (admin vs member account) |
+| 8 | Class cards' My notes still opens the weekly class note sheet | browser preview |
+| 9 | Signing out on the Notes page returns to Classes and the menu button disappears | browser preview |
+| 10 | `npm run build` passes; main bundle under 320 kB (Notes page loads lazily) | build output |
+| 11 | 44px tap targets; respects reduced motion; no sideways scroll at 375px | browser preview |
+
+### Reference to match
+
+`components/ui/BottomSheet.tsx` (motion, focus, swipe), `components/notes/NotesUI.tsx`
+(the notebook and editor being moved).
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff.
 
 ---
 
