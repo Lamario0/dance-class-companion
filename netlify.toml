@@ -2,6 +2,11 @@
   command = "npm run build"
   publish = "dist"
 
+# Node 22 for the build and the functions runtime: firebase-admin's token check
+# (jwks-rsa 4) require()s the ESM-only jose 6, which needs Node >= 22.12.
+[build.environment]
+  NODE_VERSION = "22"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
