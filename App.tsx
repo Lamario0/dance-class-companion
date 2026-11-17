@@ -11,6 +11,8 @@ const AnnouncementsView = React.lazy(() =>
 import { CalculatorView } from './components/CalculatorView';
 import { BottomTabBar, TopNav, BASE_NAV, ADMIN_NAV } from './components/Navigation';
 import { MusicProvider } from './components/music/MusicPlayer';
+import { AuthProvider } from './components/auth/AuthProvider';
+import { AccountButton, AccountSheet } from './components/auth/AccountSheet';
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ToastProvider } from './components/ui/Toast';
 import { EmptyState, DancingDots } from './components/ui/Doodles';
@@ -61,6 +63,7 @@ const App: React.FC = () => {
   const [logoClicks, setLogoClicks] = useState(0);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
+  const [accountOpen, setAccountOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   // Signed session token from /api/admin-login; lets instructors edit/delete chat messages.
   const [adminToken, setAdminToken] = useState<string | null>(null);
@@ -159,6 +162,7 @@ const App: React.FC = () => {
 
   return (
     <ToastProvider>
+     <AuthProvider>
      <MusicProvider songs={data?.songs ?? EMPTY_SONGS}>
       <div id="app-shell" className="min-h-screen bg-surface-0 font-sans text-text-hi flex flex-col">
         {/* Header — slim on mobile: logo (secret triple-tap) + page title */}
@@ -183,7 +187,10 @@ const App: React.FC = () => {
                 Dance Class <span className="text-brand-soft">Companion</span>
               </p>
             </div>
-            <TopNav items={navItems} active={activeTab} onChange={navigateTo} />
+            <div className="flex items-center gap-2">
+              <TopNav items={navItems} active={activeTab} onChange={navigateTo} />
+              <AccountButton onClick={() => setAccountOpen(true)} />
+            </div>
           </div>
         </header>
 
@@ -291,7 +298,9 @@ const App: React.FC = () => {
           </div>
         </form>
       </BottomSheet>
+      <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
      </MusicProvider>
+     </AuthProvider>
     </ToastProvider>
   );
 };

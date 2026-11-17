@@ -2,8 +2,11 @@
 // Web config comes from Vite env vars (see .env / Netlify site settings) —
 // these are safe to expose client-side; access is enforced by Firestore
 // security rules (firestore.rules), not by keeping this config secret.
+//
+// Only lazily-loaded modules (services/chatService, services/authService)
+// import this file, so the Firebase SDK stays out of the main bundle.
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -17,11 +20,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);
 
-// Local dev: VITE_FIRESTORE_EMULATOR=host:port points the app at the Firestore emulator.
-const emulator = import.meta.env.VITE_FIRESTORE_EMULATOR as string | undefined;
-if (emulator) {
-  const [host, port] = emulator.split(':');
+// Local dev (.env.development.local): point at the emulators instead of production.
+const firestoreEmulator = import.meta.env.VITE_FIRESTORE_EMULATOR as string | undefined;
+if (firestoreEmulator) {
+  const [host, port] = firestoreEmulator.split(':');
   connectFirestoreEmulator(db, host, Number(port));
 }
-export const auth = getAuth(app);
+const authEmulator = import.meta.env.VITE_AUTH_EMULATOR as string | undefined;
+if (authEmulator) {
+  connectAuthEmulator(auth, `http://${authEmulator}`, { disableWarnings: true });
+}

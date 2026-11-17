@@ -32,6 +32,29 @@ service cloud.firestore {
       }
     }
 
+    // Student profiles (services/authService.ts). Private to their owner.
+    // Roles are Firebase custom claims, never fields here, so nobody can
+    // promote themselves. Deleting happens server-side (/api/delete-account).
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['displayName', 'createdAt'])
+        && request.resource.data.keys().hasAll(['displayName', 'createdAt'])
+        && isValidName(request.resource.data.displayName)
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+        && isValidName(request.resource.data.displayName);
+
+      allow delete: if false;
+
+      function isValidName(n) {
+        return n is string && n.trim().size() > 0 && n.size() <= 40;
+      }
+    }
+
     // Everything else stays locked.
     match /{document=**} {
       allow read, write: if false;
