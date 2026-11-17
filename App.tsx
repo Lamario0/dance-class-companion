@@ -112,6 +112,17 @@ const App: React.FC = () => {
     else action();
   }, []);
   const setNotesDirty = useCallback((dirty: boolean) => { notesDirty.current = dirty; }, []);
+  // Reload / closing the tab / browser back off the site: the browser's own "Leave site?" prompt.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (activeTabRef.current === Tab.NOTES && notesDirty.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
   const leaveGuard = React.useMemo(() => ({ guardLeave, setNotesDirty }), [guardLeave, setNotesDirty]);
 
   // Left menu (signed-in users)
@@ -146,12 +157,15 @@ const App: React.FC = () => {
 
     if (newCount === 3) {
       setLogoClicks(0);
-      if (isAuthenticated) {
-        setDirection('right');
-        setActiveTab(Tab.CALCULATOR);
-      } else {
-        setShowPasswordPrompt(true);
-      }
+      // Guard only (calculator behaviour unchanged): leaving Notes with unsaved edits asks first.
+      guardLeave(() => {
+        if (isAuthenticated) {
+          setDirection('right');
+          setActiveTab(Tab.CALCULATOR);
+        } else {
+          setShowPasswordPrompt(true);
+        }
+      });
     } else {
       clickTimeoutRef.current = window.setTimeout(() => setLogoClicks(0), 500);
     }
@@ -354,7 +368,8 @@ const App: React.FC = () => {
         onClose={closeMenu}
         returnFocusTo={menuButtonRef}
         onNotes={() => { setMenuOpen(false); navigateTo(Tab.NOTES); }}
-        onAccount={() => { setMenuOpen(false); setAccountOpen(true); }}
+        // Focus the hamburger first, so the account sheet returns focus there (not to the gone drawer item).
+        onAccount={() => { menuButtonRef.current?.focus(); setMenuOpen(false); setAccountOpen(true); }}
       />
 
       {/* "Discard your changes?" when leaving the Notes page with unsaved edits */}

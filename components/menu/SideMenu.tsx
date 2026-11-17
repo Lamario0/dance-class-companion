@@ -47,9 +47,10 @@ export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAc
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   const drag = useRef<{ x: number; dx: number } | null>(null);
+  const draggedRef = useRef(false);
   const [dx, setDx] = useState(0);
 
-  // Mount, then slide in on the next frame; slide out, then unmount.
+  // Mount, then slide in on the next frame; slide out, then unmount (after the 340ms slide).
   useEffect(() => {
     if (open) {
       setMounted(true);
@@ -57,8 +58,16 @@ export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAc
       return () => cancelAnimationFrame(id);
     }
     setShown(false);
-    const t = window.setTimeout(() => setMounted(false), 320);
+    const t = window.setTimeout(() => setMounted(false), 380);
     return () => window.clearTimeout(t);
+  }, [open]);
+
+  // The page behind doesn't scroll while the drawer is open.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
   // Focus into the panel when it opens, back to the hamburger when it closes.
@@ -92,18 +101,36 @@ export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAc
 
   if (!mounted || !user) return null;
 
-  // Swipe left to close.
-  const onPointerDown = (e: React.PointerEvent) => { drag.current = { x: e.clientX, dx: 0 }; };
+  // Swipe left to close. Only counts as a drag past a small threshold, so taps on items
+  // aren't misread; the pointer is captured so a mouse released outside still ends it;
+  // a click that ends a drag is swallowed so it doesn't also open an item.
+  const onPointerDown = (e: React.PointerEvent) => {
+    drag.current = { x: e.clientX, dx: 0 };
+    draggedRef.current = false;
+  };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
-    drag.current.dx = Math.min(0, e.clientX - drag.current.x);
-    setDx(drag.current.dx);
+    const delta = Math.min(0, e.clientX - drag.current.x);
+    if (!draggedRef.current) {
+      if (delta > -10) return;
+      draggedRef.current = true;
+      try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not supported */ }
+    }
+    drag.current.dx = delta;
+    setDx(delta);
   };
   const onPointerEnd = () => {
     const moved = drag.current?.dx ?? 0;
     drag.current = null;
     setDx(0);
     if (moved < -70) onClose();
+  };
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (draggedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      draggedRef.current = false;
+    }
   };
 
   const item = (label: string, icon: React.ReactNode, onClick: () => void, sub?: string) => (
@@ -137,6 +164,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAc
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
+        onClickCapture={onClickCapture}
         className={`absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col border-r border-white/10 bg-surface-1 shadow-[var(--shadow-float)] ${
           dx ? '' : 'transition-transform duration-[340ms] ease-[var(--ease-calm)]'
         }`}

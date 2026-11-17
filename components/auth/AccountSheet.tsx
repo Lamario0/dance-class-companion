@@ -346,7 +346,8 @@ const SignedIn: React.FC<{
           <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy === 'delete'} className="btn-secondary press flex-1">
             Keep my account
           </button>
-          <button type="button" onClick={doDelete} disabled={busy === 'delete'} className="btn-primary press flex-1 !bg-rose-600 hover:!bg-rose-500">
+          {/* Guard the actual delete (not the confirm step), so cancelling can't switch the guard off. */}
+          <button type="button" onClick={() => guard(() => { void doDelete(); })} disabled={busy === 'delete'} className="btn-primary press flex-1 !bg-rose-600 hover:!bg-rose-500">
             {busy === 'delete' ? <DancingDots label="Deleting" dotClass="bg-white" /> : 'Delete forever'}
           </button>
         </div>
@@ -403,7 +404,7 @@ const SignedIn: React.FC<{
         <button type="button" onClick={() => guard(() => { service.signOut(); onDone(); })} className="btn-secondary press w-full">
           <LogOut className="h-4 w-4" /> Sign out
         </button>
-        <button type="button" onClick={() => guard(() => setConfirmDelete(true))} className="press inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] text-[15px] font-semibold text-rose-300 hover:bg-rose-500/10">
+        <button type="button" onClick={() => setConfirmDelete(true)} className="press inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] text-[15px] font-semibold text-rose-300 hover:bg-rose-500/10">
           <Trash2 className="h-4 w-4" /> Delete my account
         </button>
       </div>
