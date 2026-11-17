@@ -31,9 +31,81 @@ Only the current slice is specced. Later ones are specced when reached.
 |---|---|---|
 | 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | done 2026-11-17 (PR #2) |
 | 2 | Notes: "my notes" on each class card + a free notebook, private to each student | done 2026-11-17 (PR #3) |
-| 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | not specced |
+| 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | specced below |
 | 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email | not specced |
 | 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | not specced |
+
+---
+
+## Slice 3 - Chat identity
+
+### What it does
+
+- **Signed-in, verified students** post under their account name: the composer
+  shows "Posting as {name}", and "change" opens the account sheet where the name
+  is edited. Their messages carry a small member mark.
+- **Renaming** in the account sheet also updates the name on their messages
+  from this quarter.
+- They can **edit** and **delete** their own messages (and replies) any time
+  this quarter. Edited messages show "(edited)".
+- **Deleting a message that has replies** keeps the replies: the message shows
+  "This message was deleted". Without replies it's removed completely.
+- **Admin accounts** (the admin role from slice 1) can edit or delete any
+  message and get an "Admin" tag on their own posts. Admin deletes of a message
+  with replies also show "This message was deleted".
+- **Guests** (and unverified accounts) post exactly as today: type a name, no
+  edit/delete. "Studio Admin" stays reserved.
+- **The calculator passcode no longer controls chat**; it still unlocks the
+  calculator. The `chat-moderate` function and the passcode token in the chat
+  go away.
+- **Deleting an account** keeps its messages but shows them as
+  "Former student" (no member mark, no longer editable by anyone but admins).
+
+### Confirmed decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Post name for members | The account display name (edited in the account sheet); enforced by the rules against the profile | User choice; nobody can post under another member's name |
+| Renaming | Updates the name on their messages this quarter | Keeps the chat consistent with the account name |
+| Moderation | Admin role only, checked by Firestore rules (`request.auth.token.admin`) | User choice; slice 1 rule: never trust the UI badge |
+| Calculator passcode | Unchanged for the calculator; no longer moderates chat; `chat-moderate` removed | User choice |
+| Editing | Own messages, any time this quarter, marked "(edited)" | User choice |
+| Delete with replies | Soft delete ("This message was deleted"), replies stay; hard delete when there are no replies | User choice |
+| Who counts as a member | Signed in with a verified email (Google counts) | Slice 1 decision |
+| Guests | Unchanged: any name, no edit/delete, "Studio Admin" reserved | Decision 2026-11-17 |
+| Deleted accounts | Messages relabelled "Former student", member link removed, by `/api/delete-account` | Decision 2026-11-17 |
+| Data | `chatMessages` gains `uid` (members only), `role` ('member' / 'admin'), `editedAt`, `deleted`; existing guest messages untouched | Minimal change to the live collection |
+| Out of scope | Reactions, mentions, notifications, reporting, chat on Android (slice 5) | Keep the slice small |
+
+### Done means
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | A guest posts and replies exactly as before; no edit/delete controls on any message | browser preview |
+| 2 | A verified member's composer shows "Posting as {account name}"; "change" opens the account sheet; the post appears with a member mark | browser preview against the emulators |
+| 3 | Rules: a member can't post under a name other than their profile name, can't set another uid, can't claim the admin role; guests can't set uid/role | rules tests |
+| 4 | A member can edit their own message; it shows "(edited)"; they can't edit or delete anyone else's | browser preview + rules tests |
+| 5 | A member deletes their own message: without replies it disappears; with replies it shows "This message was deleted" and the replies stay | browser preview + emulator data check |
+| 6 | Renaming in the account sheet updates the name on that member's messages this quarter | browser preview + emulator data check |
+| 7 | An admin account sees edit/delete on every message and an Admin tag on its own posts; a non-admin can't moderate (rules refuse) | browser preview + rules tests |
+| 8 | Unlocking the calculator passcode no longer shows chat moderation; the calculator still works | browser preview |
+| 9 | Deleting an account relabels its messages "Former student" and removes the member link | delete-account test against the emulator |
+| 10 | Existing guest messages already in the live chat still display and can't be edited by non-admins | emulator with seeded old-format messages + rules tests |
+| 11 | `npm run build` passes; main bundle under 320 kB | build output |
+| 12 | Works at 375px and desktop; 44px tap targets; floating composer still rises from the nav on mobile | browser preview |
+
+### Reference to match
+
+The current chat (`components/AnnouncementsView.tsx`, `services/chatService.ts`)
+and slice 1-2's account sheet patterns.
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff.
+
+### Open questions
+
+- None.
 
 ---
 

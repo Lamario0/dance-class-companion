@@ -307,9 +307,13 @@ const SignedIn: React.FC<{
     setBusy('name');
     setError('');
     try {
-      await service.renameAccount(name);
+      const result = await service.renameAccount(name);
       setEditing(false);
-      toast.show('Name updated', 'success');
+      if (result && !result.messagesOk) {
+        toast.show("Name updated, but some chat messages still show your old name. Try renaming again.", 'error');
+      } else {
+        toast.show('Name updated', 'success');
+      }
     } catch (err) {
       setError(service.friendlyAuthError(err));
     } finally {

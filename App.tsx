@@ -64,9 +64,8 @@ const App: React.FC = () => {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
+  // Calculator passcode (dance-party attendance). Chat moderation uses the admin account role instead.
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  // Signed session token from /api/admin-login; lets instructors edit/delete chat messages.
-  const [adminToken, setAdminToken] = useState<string | null>(null);
   const [loginError, setLoginError] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
   const clickTimeoutRef = useRef<number | null>(null);
@@ -98,7 +97,6 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    setAdminToken(null);
     setDirection('left');
     setActiveTab(Tab.CLASSES);
   };
@@ -133,8 +131,6 @@ const App: React.FC = () => {
         body: JSON.stringify({ password: passwordInput }),
       });
       if (!response.ok) throw new Error('Incorrect password');
-      const { token } = await response.json().catch(() => ({ token: null }));
-      setAdminToken(typeof token === 'string' ? token : null);
       setIsAuthenticated(true);
       setShowPasswordPrompt(false);
       setDirection('right');
@@ -229,7 +225,7 @@ const App: React.FC = () => {
                     </div>
                   }
                 >
-                  <AnnouncementsView announcements={data.announcements} isAdmin={isAuthenticated} adminToken={adminToken} />
+                  <AnnouncementsView announcements={data.announcements} onOpenAccount={() => setAccountOpen(true)} />
                 </React.Suspense>
               )}
               {activeTab === Tab.CALCULATOR && isAuthenticated && (

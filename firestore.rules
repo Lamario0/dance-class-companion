@@ -3,23 +3,47 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Community chat (services/chatService.ts).
-    // Anyone can read and post. Nobody can edit or delete from a browser:
-    // instructors do that through /api/chat-moderate (Admin SDK bypasses rules).
+    // Community chat (services/chatService.ts). Anyone can read.
+    // - Guests (and unverified accounts) post under any name; nobody but an admin
+    //   can change their messages afterwards.
+    // - Members (verified accounts) post with their uid under their profile name,
+    //   and can edit, soft-delete or delete their own messages.
+    // - Admins (custom claim, never a stored field) can edit or delete any message.
+    // Deleted accounts' messages are relabelled server-side (/api/delete-account).
     // Old quarters are removed by a TTL policy on `expireAt`.
     match /chatMessages/{messageId} {
       allow read: if true;
 
-      allow create: if isValidMessage(request.resource.data);
-      allow update, delete: if false;
+      allow create: if isValidBase(request.resource.data)
+        && (isGuestPost(request.resource.data) || isMemberPost(request.resource.data));
 
-      function isValidMessage(m) {
-        return m.keys().hasOnly(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt'])
-          && m.keys().hasAll(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt'])
+      // Owners: edit text, soft-delete, or follow a rename. Admins: edit or soft-delete anything.
+      allow update: if (isOwner() && (isTextEdit() || isSoftDelete() || isRename()))
+        || (isAdmin() && (isTextEdit() || isSoftDelete()));
+
+      allow delete: if isOwner() || isAdmin();
+
+      function verified() {
+        return request.auth != null && request.auth.token.email_verified == true;
+      }
+      function isAdmin() {
+        return verified() && request.auth.token.get('admin', false) == true;
+      }
+      function isOwner() {
+        return verified() && resource.data.get('uid', null) == request.auth.uid;
+      }
+      function profileName() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName;
+      }
+      function validText(t) {
+        return t is string && t.trim().size() > 0 && t.size() <= 1000;
+      }
+
+      function isValidBase(m) {
+        return m.keys().hasAll(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt'])
           && m.author is string && m.author.trim().size() > 0 && m.author.size() <= 40
-          // "Studio Admin" is reserved for instructor posts
-          && m.author.trim().lower() != 'studio admin'
-          && m.text is string && m.text.trim().size() > 0 && m.text.size() <= 1000
+          && !isReservedName(m.author)
+          && validText(m.text)
           && (m.parentId == null
               || (m.parentId is string
                   && exists(/databases/$(database)/documents/chatMessages/$(m.parentId))))
@@ -30,6 +54,44 @@ service cloud.firestore {
           && m.expireAt > request.time
           && m.expireAt <= request.time + duration.value(93, 'd');
       }
+      // Guests and unverified accounts only: a verified member always posts as themselves.
+      function isGuestPost(m) {
+        return !verified()
+          && m.keys().hasOnly(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt']);
+      }
+      function isMemberPost(m) {
+        return verified()
+          && m.keys().hasOnly(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt', 'uid', 'role'])
+          && m.uid == request.auth.uid
+          && m.author == profileName()
+          // the admin tag only for real admins, and every admin post carries it
+          && m.role in ['member', 'admin']
+          && (m.role == 'admin') == (request.auth.token.get('admin', false) == true);
+      }
+
+      function isTextEdit() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+          && validText(request.resource.data.text)
+          && request.resource.data.editedAt == request.time
+          && resource.data.get('deleted', false) == false;
+      }
+      function isSoftDelete() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'deleted', 'editedAt'])
+          && request.resource.data.deleted == true
+          && request.resource.data.text == ''
+          && request.resource.data.editedAt == request.time;
+      }
+      function isRename() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['author'])
+          && request.resource.data.author == profileName()
+          && !isReservedName(request.resource.data.author);
+      }
+    }
+
+    // Names nobody can post or be called: "Studio Admin" (staff) and "Former student"
+    // (what deleted accounts' messages show).
+    function isReservedName(n) {
+      return n.trim().lower() in ['studio admin', 'former student'];
     }
 
     // Student profiles (services/authService.ts). Private to their owner.
@@ -51,7 +113,7 @@ service cloud.firestore {
       allow delete: if false;
 
       function isValidName(n) {
-        return n is string && n.trim().size() > 0 && n.size() <= 40;
+        return n is string && n.trim().size() > 0 && n.size() <= 40 && !isReservedName(n);
       }
 
       // Personal notes (services/notesService.ts). Owner only, verified email only

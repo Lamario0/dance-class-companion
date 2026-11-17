@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Announcement } from '../types';
-import { MessageCircle, Trash2, Edit2, Save, X, Reply, ChevronDown, Send, CalendarDays } from 'lucide-react';
+import { MessageCircle, Trash2, Edit2, Save, X, Reply, ChevronDown, Send, CalendarDays, BadgeCheck, ShieldCheck } from 'lucide-react';
 import { Segmented } from './ui/Segmented';
 import { EmptyState } from './ui/Doodles';
 import { useToast } from './ui/Toast';
 import { DancingDots } from './ui/Doodles';
 import {
-  ChatThread, subscribeToChat, postChatMessage, buildThreads, moderateChat, MAX_AUTHOR, MAX_TEXT,
+  ChatThread, ChatRole, subscribeToChat, postChatMessage, buildThreads, editChatMessage, deleteChatMessage, MAX_AUTHOR, MAX_TEXT,
 } from '../services/chatService';
+import { useAccount } from './auth/AuthProvider';
 
 // UI-only: remember the chat name locally after the first post.
 const NAME_KEY = 'dcc_chat_name';
@@ -53,9 +54,8 @@ const splitDate = (d: string) => {
 
 interface AnnouncementsViewProps {
   announcements: Announcement[];
-  isAdmin?: boolean;
-  /** signed instructor session token from /api/admin-login, for edit/delete */
-  adminToken?: string | null;
+  /** open the account sheet (members change their posting name there) */
+  onOpenAccount: () => void;
 }
 
 type Comment = ChatThread;
@@ -77,7 +77,7 @@ const LEGEND = [
   { label: 'Misc/Other', colorClass: 'bg-slate-400', textClass: 'text-slate-400', key: 'white' }
 ];
 
-export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announcements, isAdmin = false, adminToken = null }) => {
+export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announcements, onOpenAccount }) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [chatStatus, setChatStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [chatRetry, setChatRetry] = useState(0);
@@ -125,27 +125,39 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
     return unsub;
   }, [chatRetry]);
 
-  const handleDelete = async (commentId: string) => {
-    if (!adminToken) return;
-    if (!window.confirm('Delete this message and its replies?')) return;
+  // Who's posting: verified members post under their account name (and own their
+  // messages); everyone else posts as a guest. Admin powers come from the role,
+  // and the rules re-check all of this on the server.
+  const { user, verified, displayName, isAdmin, profileLoaded } = useAccount();
+  // Member posts must match the stored profile name exactly, so wait until it has loaded.
+  const member = !!user && verified && profileLoaded && !!displayName;
+  // A verified account can't post as a guest (rules), so hold the composer until the profile is in.
+  const memberPending = !!user && verified && !profileLoaded;
+  const role: ChatRole = isAdmin ? 'admin' : 'member';
+  const postAs = member ? { uid: user!.uid, role } : undefined;
+  const canModify = (c: Comment) => !c.deleted && (isAdmin || (member && c.uid === user!.uid));
+
+  const handleDelete = async (comment: Comment) => {
+    if (!window.confirm('Delete this message?')) return;
     const t = toast.show('Deleting…', 'loading');
     try {
-      await moderateChat(adminToken, { type: 'delete', id: commentId });
+      await deleteChatMessage(comment.id);
       t.update('Deleted', 'success');
     } catch (err) {
-      t.update((err as Error).message || "Couldn't delete that.", 'error');
+      console.error(err);
+      t.update("Couldn't delete that. Please try again.", 'error');
     }
   };
 
   const handleEdit = async (commentId: string, text: string) => {
-    if (!adminToken) return false;
     const t = toast.show('Saving…', 'loading');
     try {
-      await moderateChat(adminToken, { type: 'edit', id: commentId, text });
+      await editChatMessage(commentId, text);
       t.update('Saved', 'success');
       return true;
     } catch (err) {
-      t.update((err as Error).message || "Couldn't save that.", 'error');
+      console.error(err);
+      t.update("Couldn't save that. Please try again.", 'error');
       return false;
     }
   };
@@ -153,7 +165,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   const handleReply = async (parentId: string, author: string, text: string) => {
     const t = toast.show('Posting…', 'loading');
     try {
-      await postChatMessage(author, text, parentId);
+      await postChatMessage(member ? displayName : author, text, parentId, postAs);
       t.update('Posted!', 'success');
       return true;
     } catch (err) {
@@ -186,16 +198,18 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
 
   const onComposerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const author = newAuthor.trim();
+    const author = member ? displayName : newAuthor.trim();
     const text = newText.trim();
     if (!author || !text || posting) return;
     setPosting(true);
     const t = toast.show('Posting…', 'loading');
-    saveName(author);
-    setSavedName(author);
-    setEditingName(false);
+    if (!member) {
+      saveName(author);
+      setSavedName(author);
+      setEditingName(false);
+    }
     try {
-      await postChatMessage(author, text);
+      await postChatMessage(author, text, null, postAs);
       setNewText('');
       t.update('Posted!', 'success');
     } catch (err) {
@@ -341,7 +355,8 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                     <li key={comment.id} style={{ ['--i' as any]: Math.min(i, 8) }}>
                       <CommentItem
                         comment={comment}
-                        isAdmin={isAdmin}
+                        canModify={canModify}
+                        memberName={member ? displayName : null}
                         onDelete={handleDelete}
                         onEdit={handleEdit}
                         onReply={handleReply}
@@ -369,7 +384,18 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
               }
               style={isDesktop ? undefined : { bottom: 'calc(var(--nav-h) + 8px)' }}
             >
-              {askName ? (
+              {member ? (
+                <p className="mb-1.5 flex items-center gap-1 px-1 text-[13px] text-text-lo">
+                  <BadgeCheck className="h-3.5 w-3.5 text-brand-soft" aria-hidden="true" />
+                  Posting as <span className="font-semibold text-text-mid">{displayName}</span>
+                  {' · '}
+                  <button type="button" onClick={onOpenAccount} className="inline-flex min-h-11 min-w-11 items-center justify-center -my-3 font-semibold text-brand-soft underline-offset-2 hover:underline">
+                    change
+                  </button>
+                </p>
+              ) : memberPending ? (
+                <p className="mb-1.5 px-1 text-[13px] text-text-lo">Loading your account…</p>
+              ) : askName ? (
                 <div className="mb-2">
                   <label htmlFor="chat-name" className="sr-only">Your name</label>
                   <input
@@ -406,7 +432,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                 />
                 <button
                   type="submit"
-                  disabled={!newAuthor.trim() || !newText.trim() || posting}
+                  disabled={memberPending || (!member && !newAuthor.trim()) || !newText.trim() || posting}
                   aria-label="Post message"
                   data-tip="Post"
                   className="tip press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-strong text-white hover:bg-brand disabled:opacity-40 disabled:cursor-not-allowed"
@@ -424,23 +450,29 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
 
 interface CommentItemProps {
   comment: Comment;
-  isAdmin: boolean;
-  onDelete: (id: string) => void;
+  /** may the viewer edit/delete this message (own message as a member, or any as admin) */
+  canModify: (c: Comment) => boolean;
+  /** the viewer's account name when they're a verified member (replies post under it) */
+  memberName: string | null;
+  onDelete: (c: Comment) => void;
   onEdit: (id: string, text: string) => Promise<boolean>;
   onReply: (parentId: string, author: string, text: string) => Promise<boolean>;
   depth: number;
-  /** UI-only: prefill reply name with the remembered chat name */
+  /** UI-only: prefill a guest's reply name with the remembered chat name */
   defaultName?: string;
 }
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, onEdit, onReply, depth, defaultName = '' }) => {
+const CommentItem: React.FC<CommentItemProps> = ({ comment, canModify, memberName, onDelete, onEdit, onReply, depth, defaultName = '' }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.text);
   const [isReplying, setIsReplying] = useState(false);
   const [replyAuthor, setReplyAuthor] = useState(defaultName);
   const [replyText, setReplyText] = useState('');
-
   const [busy, setBusy] = useState(false);
+
+  const mine = canModify(comment);
+  const isAdminPost = comment.role === 'admin';
+  const isMemberPost = !!comment.uid;
 
   const handleSaveEdit = async () => {
     if (!editText.trim() || busy) return;
@@ -451,17 +483,15 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
 
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyAuthor.trim() || !replyText.trim() || busy) return;
+    const author = memberName ?? replyAuthor.trim();
+    if (!author || !replyText.trim() || busy) return;
     setBusy(true);
-    if (await onReply(comment.id, replyAuthor.trim(), replyText.trim())) {
+    if (await onReply(comment.id, author, replyText.trim())) {
       setIsReplying(false);
       setReplyText('');
     }
     setBusy(false);
   };
-
-  // "Studio Admin" is reserved by firestore.rules, so only older built-in posts carry it.
-  const isStaff = comment.author === 'Studio Admin';
 
   return (
     <div className={`flex gap-3 ${depth > 0 ? 'mt-4' : ''}`}>
@@ -469,33 +499,57 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
       <div className="group/avatar relative shrink-0">
         <div
           className={`grid h-9 w-9 place-items-center rounded-full text-[13px] font-bold uppercase ${
-            isStaff ? 'bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white' : 'bg-surface-2 text-text-mid'
+            comment.deleted
+              ? 'bg-surface-2 text-text-lo'
+              : isAdminPost
+                ? 'bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white'
+                : isMemberPost
+                  ? 'bg-brand-strong/30 text-brand-soft'
+                  : 'bg-surface-2 text-text-mid'
           }`}
           aria-hidden="true"
         >
-          {comment.author.substring(0, 2)}
+          {comment.deleted ? '–' : comment.author.substring(0, 2)}
         </div>
-        <span
-          className="pointer-events-none absolute bottom-full left-0 mb-2 hidden -rotate-6 scale-75 whitespace-nowrap rounded-sm bg-accent px-2 py-1 text-[12px] font-bold text-surface-0 opacity-0 shadow-lg transition-all duration-300 ease-[var(--ease-spring)] md:block md:group-hover/avatar:scale-100 md:group-hover/avatar:opacity-100 md:group-hover/avatar:-rotate-3"
-          aria-hidden="true"
-        >
-          {comment.author}
-        </span>
+        {!comment.deleted && (
+          <span
+            className="pointer-events-none absolute bottom-full left-0 mb-2 hidden -rotate-6 scale-75 whitespace-nowrap rounded-sm bg-accent px-2 py-1 text-[12px] font-bold text-surface-0 opacity-0 shadow-lg transition-all duration-300 ease-[var(--ease-spring)] md:block md:group-hover/avatar:scale-100 md:group-hover/avatar:opacity-100 md:group-hover/avatar:-rotate-3"
+            aria-hidden="true"
+          >
+            {comment.author}
+          </span>
+        )}
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="group">
           <div className="flex items-start justify-between gap-2">
-            <p className="flex flex-wrap items-baseline gap-x-2">
-              <span className={`font-semibold ${isStaff ? 'text-accent' : 'text-text-hi'}`}>{comment.author}</span>
-              <span className="text-[13px] text-text-lo">{formatDate(comment.createdAt)}</span>
+            <p className="flex flex-wrap items-center gap-x-2">
+              {comment.deleted ? (
+                <span className="font-semibold text-text-lo">Deleted message</span>
+              ) : (
+                <>
+                  <span className={`font-semibold ${isAdminPost ? 'text-accent' : 'text-text-hi'}`}>{comment.author}</span>
+                  {isAdminPost ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-strong/25 px-2 py-0.5 text-[12px] font-semibold text-brand-soft ring-1 ring-brand/40">
+                      <ShieldCheck className="h-3 w-3" aria-hidden="true" /> Admin
+                    </span>
+                  ) : isMemberPost ? (
+                    <BadgeCheck className="h-4 w-4 text-brand-soft" aria-label="Member" />
+                  ) : null}
+                </>
+              )}
+              <span className="text-[13px] text-text-lo">
+                {formatDate(comment.createdAt)}
+                {comment.edited && ' · (edited)'}
+              </span>
             </p>
-            {isAdmin && (
+            {mine && !isEditing && (
               <div className="-mr-2 -mt-2 flex items-center opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
-                <button onClick={() => setIsEditing(!isEditing)} aria-label="Edit comment" data-tip="Edit" className="tip press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:bg-surface-2 hover:text-sky-300">
+                <button onClick={() => { setEditText(comment.text); setIsEditing(true); }} aria-label="Edit message" data-tip="Edit" className="tip press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:bg-surface-2 hover:text-sky-300">
                   <Edit2 className="h-4 w-4" />
                 </button>
-                <button onClick={() => onDelete(comment.id)} aria-label="Delete comment" data-tip="Delete" className="tip press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:bg-surface-2 hover:text-rose-300">
+                <button onClick={() => onDelete(comment)} aria-label="Delete message" data-tip="Delete" className="tip press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:bg-surface-2 hover:text-rose-300">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -506,16 +560,19 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
             <div className="mt-2 space-y-2">
               <textarea
                 value={editText}
+                maxLength={MAX_TEXT}
                 onChange={(e) => setEditText(e.target.value)}
-                aria-label="Edit comment"
+                aria-label="Edit message"
                 className="input resize-none"
                 rows={2}
               />
               <div className="flex justify-end gap-1">
                 <button onClick={() => setIsEditing(false)} aria-label="Cancel edit" className="press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:text-text-hi"><X className="h-4 w-4"/></button>
-                <button onClick={handleSaveEdit} aria-label="Save edit" className="press grid h-11 w-11 place-items-center rounded-full text-emerald-400 hover:text-emerald-300"><Save className="h-4 w-4"/></button>
+                <button onClick={handleSaveEdit} disabled={busy || !editText.trim()} aria-label="Save edit" className="press grid h-11 w-11 place-items-center rounded-full text-emerald-400 hover:text-emerald-300 disabled:opacity-40"><Save className="h-4 w-4"/></button>
               </div>
             </div>
+          ) : comment.deleted ? (
+            <p className="mt-0.5 italic text-text-lo">This message was deleted</p>
           ) : (
             <p className="mt-0.5 whitespace-pre-wrap leading-relaxed text-text-mid">{comment.text}</p>
           )}
@@ -533,28 +590,35 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
         {/* Reply Form */}
         {isReplying && (
           <form onSubmit={handleSubmitReply} className="mt-1 space-y-2 border-l-2 border-brand/50 pl-3 animate-fade">
-            <input
-               type="text"
-               value={replyAuthor}
-               onChange={(e) => setReplyAuthor(e.target.value)}
-               placeholder="Your name"
-               aria-label="Your name"
-               maxLength={MAX_AUTHOR}
-               className="input !min-h-11 !py-2"
-             />
-             <textarea
-               maxLength={MAX_TEXT}
-               value={replyText}
-               onChange={(e) => setReplyText(e.target.value)}
-               placeholder="Write a reply…"
-               aria-label="Reply"
-               rows={2}
-               className="input resize-none"
-             />
-             <div className="flex justify-end gap-2">
-               <button type="button" onClick={() => setIsReplying(false)} className="btn-secondary press !min-h-11 text-[15px]">Cancel</button>
-               <button type="submit" disabled={!replyAuthor.trim() || !replyText.trim() || busy} className="btn-primary press !min-h-11 text-[15px]">Reply</button>
-             </div>
+            {memberName ? (
+              <p className="flex items-center gap-1 text-[13px] text-text-lo">
+                <BadgeCheck className="h-3.5 w-3.5 text-brand-soft" aria-hidden="true" />
+                Replying as <span className="font-semibold text-text-mid">{memberName}</span>
+              </p>
+            ) : (
+              <input
+                type="text"
+                value={replyAuthor}
+                onChange={(e) => setReplyAuthor(e.target.value)}
+                placeholder="Your name"
+                aria-label="Your name"
+                maxLength={MAX_AUTHOR}
+                className="input !min-h-11 !py-2"
+              />
+            )}
+            <textarea
+              maxLength={MAX_TEXT}
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder="Write a reply…"
+              aria-label="Reply"
+              rows={2}
+              className="input resize-none"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setIsReplying(false)} className="btn-secondary press !min-h-11 text-[15px]">Cancel</button>
+              <button type="submit" disabled={(!memberName && !replyAuthor.trim()) || !replyText.trim() || busy} className="btn-primary press !min-h-11 text-[15px]">Reply</button>
+            </div>
           </form>
         )}
 
@@ -563,7 +627,8 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, isAdmin, onDelete, o
           <CommentItem
             key={reply.id}
             comment={reply}
-            isAdmin={isAdmin}
+            canModify={canModify}
+            memberName={memberName}
             onDelete={onDelete}
             onEdit={onEdit}
             onReply={onReply}
