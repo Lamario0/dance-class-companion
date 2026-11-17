@@ -16,6 +16,8 @@ import { AccountButton, AccountSheet } from './components/auth/AccountSheet';
 import { useAccount } from './components/auth/AuthProvider';
 import { MenuButton, SideMenu } from './components/menu/SideMenu';
 import { LeaveGuardProvider } from './components/menu/LeaveGuard';
+import { apiUrl } from './services/platform';
+import { useAndroidBackButton } from './components/menu/backButton';
 import { NotebookPen, Users } from 'lucide-react';
 // The Notes page pulls in Firestore, so it loads on first visit.
 const NotesPage = React.lazy(() => import('./components/notes/NotesUI').then(m => ({ default: m.NotesPage })));
@@ -139,6 +141,7 @@ const App: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useAndroidBackButton(menuOpen, closeMenu);
 
   const navigateTo = (tab: Tab) => {
     // We allow navigation without logging out the admin
@@ -186,7 +189,7 @@ const App: React.FC = () => {
     setLoginPending(true);
     setLoginError(false);
     try {
-      const response = await fetch('/api/admin-login', {
+      const response = await fetch(apiUrl('/api/admin-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: passwordInput }),

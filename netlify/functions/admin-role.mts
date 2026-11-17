@@ -5,8 +5,9 @@
 //   ID token they already hold can still carry the old claim for up to an hour.
 // An admin can't remove their own role here (no accidental lock-out).
 import { adminAuth, adminConfigured, json, requireAdmin } from '../lib/firebaseAdmin.mts';
+import { withAppCors } from '../lib/cors.mts';
 
-export default async (req: Request, _context?: unknown) => {
+export default withAppCors(async (req: Request, _context?: unknown) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (!adminConfigured()) return json({ error: 'Admin tools are not configured.' }, 500);
   const auth = await requireAdmin(req);
@@ -38,7 +39,7 @@ export default async (req: Request, _context?: unknown) => {
     return json({ error: "Couldn't change that role. Please try again." }, 500);
   }
   return json({ ok: true, admin: makeAdmin });
-};
+});
 
 export const config = {
   path: '/api/admin/role',

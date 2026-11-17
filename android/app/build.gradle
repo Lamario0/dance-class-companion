@@ -13,9 +13,9 @@ android {
         applicationId "com.danceclasscompanion.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Play Console already has codes up to at least 3; 10 leaves clear headroom.
-        versionCode 10
-        versionName "1.1.0"
+        // Play Console has used up to 10 (1.1.0). Bump for every upload.
+        versionCode 11
+        versionName "1.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

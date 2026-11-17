@@ -7,8 +7,9 @@
 // be left behind if the browser closes halfway.
 import { adminConfigured, json, verifyUser } from '../lib/firebaseAdmin.mts';
 import { deleteAccountData } from '../lib/accounts.mts';
+import { withAppCors } from '../lib/cors.mts';
 
-export default async (req: Request, _context?: unknown) => {
+export default withAppCors(async (req: Request, _context?: unknown) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (!adminConfigured()) {
     console.error('FIREBASE_SERVICE_ACCOUNT is not configured.');
@@ -25,7 +26,7 @@ export default async (req: Request, _context?: unknown) => {
     return json({ error: "Couldn't finish deleting your account. Please try again in a minute." }, 500);
   }
   return json({ ok: true });
-};
+});
 
 export const config = {
   path: '/api/delete-account',

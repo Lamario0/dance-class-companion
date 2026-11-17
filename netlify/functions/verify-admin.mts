@@ -2,8 +2,8 @@
 // ADMIN_PASSWORD environment variable (Netlify site settings) and never
 // reaches the client bundle. A short-lived signed token is handed back so
 // the client can remember it's logged in without re-sending the password.
-import type { Context } from '@netlify/functions';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { withAppCors } from '../lib/cors.mts';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -23,7 +23,7 @@ const safeEqual = (a: string, b: string) => {
   return timingSafeEqual(bufA, bufB);
 };
 
-export default async (req: Request, _context: Context) => {
+export default withAppCors(async (req: Request, _context?: unknown) => {
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed.' }, 405);
   }
@@ -54,7 +54,7 @@ export default async (req: Request, _context: Context) => {
   const token = `${payload}.${sign(payload, sessionSecret)}`;
 
   return json({ token, expiresAt });
-};
+});
 
 export const config = {
   path: '/api/admin-login',

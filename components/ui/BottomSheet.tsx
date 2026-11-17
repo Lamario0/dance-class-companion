@@ -17,6 +17,16 @@ const subscribe = (l: () => void) => {
 };
 export const useAnySheetOpen = () => useSyncExternalStore(subscribe, () => openCount > 0, () => false);
 
+// Open sheets, newest last: Escape and the Android back button close only the top one.
+const sheetStack: Array<{ close: () => void }> = [];
+/** Close the top open sheet; false if none is open. */
+export const closeTopSheet = () => {
+  const top = sheetStack[sheetStack.length - 1];
+  if (!top) return false;
+  top.close();
+  return true;
+};
+
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -82,11 +92,19 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ open, onClose, title, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Esc + scroll lock + initial focus
+  // Esc (top sheet only) + scroll lock + initial focus
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', onKey);
+    const entry = { close: () => onCloseRef.current() };
+    sheetStack.push(entry);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || sheetStack[sheetStack.length - 1] !== entry) return;
+      e.stopImmediatePropagation(); // don't also close the menu underneath
+      entry.close();
+    };
+    document.addEventListener('keydown', onKey, true);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const t = window.setTimeout(() => {
@@ -96,11 +114,13 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ open, onClose, title, 
       (auto ?? panel).focus({ preventScroll: true });
     }, 60);
     return () => {
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
+      const i = sheetStack.indexOf(entry);
+      if (i >= 0) sheetStack.splice(i, 1);
       document.body.style.overflow = prevOverflow;
       window.clearTimeout(t);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!mounted) return null;
 
