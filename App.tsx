@@ -215,7 +215,7 @@ const App: React.FC = () => {
           ) : (
             <div key={activeTab} className={direction === 'right' ? 'enter-right' : 'enter-left'}>
               {activeTab === Tab.CLASSES && (
-                <ClassesView classes={data.classes} videoOfMonth={videoOfMonth} />
+                <ClassesView classes={data.classes} videoOfMonth={videoOfMonth} onRequireAccount={() => setAccountOpen(true)} />
               )}
               {activeTab === Tab.MEDIA && (
                 <MediaView videos={data.videos} songs={data.songs} />

@@ -1,6 +1,8 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { NotebookPen } from 'lucide-react';
 import { DanceClass, VideoItem } from '../types';
+import { useAccount } from './auth/AuthProvider';
 import { VideoFacade } from './YouTubeEmbed';
 import { EmptyState, NoteDoodle, SparkleDoodle, FootprintsDoodle, SwirlDoodle } from './ui/Doodles';
 
@@ -39,7 +41,12 @@ const InstructorNotes: React.FC<{ notes: string }> = ({ notes }) => {
 interface ClassesViewProps {
   classes: DanceClass[];
   videoOfMonth?: VideoItem;
+  /** open the account sheet (sign in / verify email) */
+  onRequireAccount: () => void;
 }
+
+// Notes pull in Firestore, so they load on first use.
+const ClassNotesSheet = lazy(() => import('./notes/NotesUI').then(m => ({ default: m.ClassNotesSheet })));
 
 /** Notes that carry no information are hidden entirely. */
 const hasRealNotes = (notes?: string) => {
@@ -66,9 +73,25 @@ const PageHeading: React.FC = () => (
   </div>
 );
 
-export const ClassesView: React.FC<ClassesViewProps> = ({ classes, videoOfMonth }) => {
+export const ClassesView: React.FC<ClassesViewProps> = ({ classes, videoOfMonth, onRequireAccount }) => {
+  const { user, verified } = useAccount();
+  const [notesFor, setNotesFor] = useState<{ name: string; pattern: string } | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Notes need a verified account; otherwise the account sheet walks them through sign-in / verification.
+  const openNotes = (name: string, pattern: string) => {
+    if (!user || !verified) return onRequireAccount();
+    setNotesFor({ name, pattern });
+    setSheetOpen(true);
+  };
+
   return (
     <div className="space-y-10">
+      {notesFor && (
+        <Suspense fallback={null}>
+          <ClassNotesSheet open={sheetOpen} onClose={() => setSheetOpen(false)} className={notesFor.name} pattern={notesFor.pattern} />
+        </Suspense>
+      )}
       <PageHeading />
 
       {/* auto-rows-fr: every card is as tall as the tallest one; long notes scroll inside */}
@@ -90,6 +113,17 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ classes, videoOfMonth 
                 </ul>
 
                 {hasRealNotes(cls.notes) && <InstructorNotes notes={cls.notes} />}
+
+                {/* mt-auto keeps the button on the card's bottom edge, so equal-height cards stay tidy */}
+                <div className="mt-auto pt-4">
+                  <button
+                    type="button"
+                    onClick={() => openNotes(cls.name, patterns.join(', '))}
+                    className="press inline-flex min-h-11 items-center gap-2 rounded-full bg-surface-2 px-4 text-[15px] font-semibold text-text-mid hover:bg-[#2a2340] hover:text-text-hi"
+                  >
+                    <NotebookPen className="h-4 w-4 text-brand-soft" /> My notes
+                  </button>
+                </div>
               </article>
             );
           })}

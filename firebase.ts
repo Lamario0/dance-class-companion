@@ -7,7 +7,13 @@
 // import this file, so the Firebase SDK stays out of the main bundle.
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  memoryLocalCache,
+  connectFirestoreEmulator,
+} from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,7 +25,18 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// Offline cache: notes written in a studio with bad signal are kept on the
+// device and sync when the connection is back. Falls back to memory-only where
+// IndexedDB isn't available (some private-browsing modes).
+const makeDb = () => {
+  try {
+    return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch (err) {
+    console.warn('Offline cache unavailable, using memory cache', err);
+    return initializeFirestore(app, { localCache: memoryLocalCache() });
+  }
+};
+export const db = makeDb();
 export const auth = getAuth(app);
 
 // Local dev (.env.development.local): point at the emulators instead of production.

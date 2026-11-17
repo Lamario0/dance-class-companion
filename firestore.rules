@@ -53,6 +53,44 @@ service cloud.firestore {
       function isValidName(n) {
         return n is string && n.trim().size() > 0 && n.size() <= 40;
       }
+
+      // Personal notes (services/notesService.ts). Owner only, verified email only
+      // (Google sign-ins are verified). Account deletion removes them server-side.
+      match /notes/{noteId} {
+        allow read, delete: if isVerifiedOwner();
+
+        allow create: if isVerifiedOwner()
+          && request.resource.data.keys().hasOnly(['kind', 'classKey', 'className', 'pattern', 'weekOf', 'title', 'body', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['kind', 'classKey', 'className', 'pattern', 'weekOf', 'title', 'body', 'createdAt', 'updatedAt'])
+          && request.resource.data.kind in ['class', 'free']
+          && isText(request.resource.data.classKey, 60)
+          && isText(request.resource.data.className, 100)
+          && isText(request.resource.data.pattern, 300)
+          && isText(request.resource.data.weekOf, 10)
+          && isText(request.resource.data.title, 80)
+          && isText(request.resource.data.body, 10000)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          // class notes: id is "<classKey>__<weekOf>", so one entry per class per week
+          && (request.resource.data.kind == 'free'
+              || (request.resource.data.weekOf.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+                  && request.resource.data.classKey.size() > 0
+                  && noteId == request.resource.data.classKey + '__' + request.resource.data.weekOf));
+
+        allow update: if isVerifiedOwner()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt'])
+          && isText(request.resource.data.title, 80)
+          && isText(request.resource.data.body, 10000)
+          && request.resource.data.updatedAt == request.time;
+
+        function isVerifiedOwner() {
+          return request.auth != null && request.auth.uid == uid
+            && request.auth.token.email_verified == true;
+        }
+        function isText(v, max) {
+          return v is string && v.size() <= max;
+        }
+      }
     }
 
     // Everything else stays locked.

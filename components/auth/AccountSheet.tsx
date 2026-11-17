@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Mail, LogOut, Pencil, Check, X, ShieldCheck, Trash2, RotateCw, UserRound } from 'lucide-react';
 import { BottomSheet } from '../ui/BottomSheet';
 import { Segmented } from '../ui/Segmented';
@@ -7,6 +7,9 @@ import { useToast } from '../ui/Toast';
 import { useAccount } from './AuthProvider';
 
 const MIN_PASSWORD = 8;
+
+// The notebook pulls in Firestore, so it loads when a signed-in student opens the sheet.
+const Notebook = lazy(() => import('../notes/NotesUI').then(m => ({ default: m.Notebook })));
 
 const initials = (name: string, email?: string | null) =>
   (name || email || '?')
@@ -282,7 +285,7 @@ const VerifyEmail: React.FC = () => {
 /* ------------------------------------------------------------------ */
 /* Signed in                                                          */
 /* ------------------------------------------------------------------ */
-const SignedIn: React.FC<{ onDone: () => void }> = ({ onDone }) => {
+const SignedIn: React.FC<{ onDone: () => void; registerGuard: (dirty: boolean) => void }> = ({ onDone, registerGuard }) => {
   const { user, displayName, isAdmin, service } = useAccount();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -389,9 +392,10 @@ const SignedIn: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 
       {error && <p role="alert" className="mt-3 rounded-[var(--radius-sm)] bg-rose-500/10 px-3 py-2 text-[15px] text-rose-200">{error}</p>}
 
-      <div className="mt-6 flex items-start gap-3 rounded-[var(--radius-md)] bg-surface-2/60 p-4 text-[15px] text-text-mid">
-        <NoteDoodle className="h-6 w-6 shrink-0 text-brand-soft" still />
-        <p>Personal class notes are coming next. They'll live right here in your account.</p>
+      <div className="mt-6 border-t border-line pt-5">
+        <Suspense fallback={<div className="flex justify-center py-6"><DancingDots label="Loading your notes" /></div>}>
+          <Notebook registerGuard={registerGuard} />
+        </Suspense>
       </div>
 
       <div className="mt-6 space-y-2">
@@ -427,9 +431,27 @@ export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({
     return () => window.removeEventListener('focus', onFocus);
   }, [open, user, verified, service]);
 
+  // The notebook reports unsaved edits here, so closing the sheet can ask first.
+  const notesDirty = useRef(false);
+  const registerGuard = useCallback((dirty: boolean) => { notesDirty.current = dirty; }, []);
+  const [askClose, setAskClose] = useState(false);
+  useEffect(() => { if (!open) setAskClose(false); }, [open]);
+  const requestClose = () => (notesDirty.current ? setAskClose(true) : onClose());
+  const discardAndClose = () => { notesDirty.current = false; setAskClose(false); onClose(); };
+
   const title = loading ? 'Your account' : failed ? 'Sign in' : !user ? 'Sign in' : !verified ? 'Almost there' : 'Your account';
   return (
-    <BottomSheet open={open} onClose={onClose} title={title} size="sm">
+    <BottomSheet open={open} onClose={requestClose} title={title} size="sm">
+      {askClose && (
+        <div role="alertdialog" aria-label="Discard your changes?" className="mb-5 rounded-[var(--radius-md)] bg-amber-500/10 p-4 animate-fade">
+          <p className="font-bold">Discard your changes?</p>
+          <p className="mt-1 text-[15px] text-text-mid">Your edits to this note haven't been saved.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={() => setAskClose(false)} className="btn-primary press flex-1">Keep editing</button>
+            <button type="button" onClick={discardAndClose} className="btn-secondary press flex-1">Discard</button>
+          </div>
+        </div>
+      )}
       {loading ? (
         <Loading />
       ) : failed ? (
@@ -445,7 +467,7 @@ export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({
       ) : !verified ? (
         <VerifyEmail />
       ) : (
-        <SignedIn onDone={onClose} />
+        <SignedIn onDone={onClose} registerGuard={registerGuard} />
       )}
     </BottomSheet>
   );
