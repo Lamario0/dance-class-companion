@@ -42,8 +42,7 @@ service cloud.firestore {
       function isValidBase(m) {
         return m.keys().hasAll(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt'])
           && m.author is string && m.author.trim().size() > 0 && m.author.size() <= 40
-          // "Studio Admin" is reserved
-          && m.author.trim().lower() != 'studio admin'
+          && !isReservedName(m.author)
           && validText(m.text)
           && (m.parentId == null
               || (m.parentId is string
@@ -55,8 +54,10 @@ service cloud.firestore {
           && m.expireAt > request.time
           && m.expireAt <= request.time + duration.value(93, 'd');
       }
+      // Guests and unverified accounts only: a verified member always posts as themselves.
       function isGuestPost(m) {
-        return m.keys().hasOnly(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt']);
+        return !verified()
+          && m.keys().hasOnly(['author', 'text', 'parentId', 'quarter', 'createdAt', 'expireAt']);
       }
       function isMemberPost(m) {
         return verified()
@@ -82,8 +83,15 @@ service cloud.firestore {
       }
       function isRename() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['author'])
-          && request.resource.data.author == profileName();
+          && request.resource.data.author == profileName()
+          && !isReservedName(request.resource.data.author);
       }
+    }
+
+    // Names nobody can post or be called: "Studio Admin" (staff) and "Former student"
+    // (what deleted accounts' messages show).
+    function isReservedName(n) {
+      return n.trim().lower() in ['studio admin', 'former student'];
     }
 
     // Student profiles (services/authService.ts). Private to their owner.
@@ -105,7 +113,7 @@ service cloud.firestore {
       allow delete: if false;
 
       function isValidName(n) {
-        return n is string && n.trim().size() > 0 && n.size() <= 40;
+        return n is string && n.trim().size() > 0 && n.size() <= 40 && !isReservedName(n);
       }
 
       // Personal notes (services/notesService.ts). Owner only, verified email only

@@ -18,7 +18,6 @@ import {
   addDoc,
   doc,
   updateDoc,
-  deleteDoc,
   onSnapshot,
   query,
   where,
@@ -111,13 +110,14 @@ export const editChatMessage = (id: string, text: string) =>
   updateDoc(doc(db, COLLECTION, id), { text: text.trim().slice(0, MAX_TEXT), editedAt: serverTimestamp() });
 
 /**
- * Delete a message (own, or any as admin). With replies it becomes
- * "This message was deleted" so the conversation under it stays readable.
+ * Delete a message (own, or any as admin). Always a soft delete: the text is
+ * wiped and the message hidden, unless it has replies, in which case it shows
+ * "This message was deleted" so the conversation under it stays readable. (A
+ * hard delete could orphan a reply this device hasn't seen yet.) The empty
+ * document is removed by the quarterly TTL.
  */
-export const deleteChatMessage = (id: string, hasReplies: boolean) =>
-  hasReplies
-    ? updateDoc(doc(db, COLLECTION, id), { text: '', deleted: true, editedAt: serverTimestamp() })
-    : deleteDoc(doc(db, COLLECTION, id));
+export const deleteChatMessage = (id: string) =>
+  updateDoc(doc(db, COLLECTION, id), { text: '', deleted: true, editedAt: serverTimestamp() });
 
 /** Flat list → threads. Newest top-level first, replies oldest first. */
 export const buildThreads = (messages: ChatMessage[]): ChatThread[] => {

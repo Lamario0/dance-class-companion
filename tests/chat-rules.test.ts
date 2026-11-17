@@ -56,7 +56,24 @@ test('an admin posts with the admin tag, and only with it', async () => {
   await assertSucceeds(addDoc(msgs(boss()), post({ author: 'Boss', uid: 'boss', role: 'admin' })));
   await assertFails(addDoc(msgs(boss()), post({ author: 'Boss', uid: 'boss', role: 'member' })));
 });
-test('"Studio Admin" stays reserved', () => assertFails(addDoc(msgs(guest()), post({ author: 'studio admin' }))));
+test('"Studio Admin" and "Former student" stay reserved', async () => {
+  await assertFails(addDoc(msgs(guest()), post({ author: 'studio admin' })));
+  await assertFails(addDoc(msgs(guest()), post({ author: ' Former Student ' })));
+});
+test('a verified member cannot post under another name via the guest path', async () => {
+  await assertFails(addDoc(msgs(alice()), post({ author: 'Bob' })));
+  await assertFails(addDoc(msgs(alice()), post({ author: 'Alice' })));
+});
+test('a member cannot rename their profile (or messages) to a reserved name', async () => {
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), { displayName: 'Studio Admin' }));
+  await assertFails(updateDoc(doc(alice(), 'users/alice'), { displayName: 'former student' }));
+  await env.withSecurityRulesDisabled(ctx => updateDoc(doc(ctx.firestore(), 'users/alice'), { displayName: 'Studio Admin' }));
+  await assertFails(updateDoc(doc(alice(), 'chatMessages/aliceMsg'), { author: 'Studio Admin' }));
+});
+test('replying under a soft-deleted message still works', async () => {
+  await env.withSecurityRulesDisabled(ctx => updateDoc(doc(ctx.firestore(), 'chatMessages/aliceMsg'), { text: '', deleted: true, editedAt: Timestamp.now() }));
+  await assertSucceeds(addDoc(msgs(guest()), post({ author: 'Guest', parentId: 'aliceMsg' })));
+});
 
 // --- editing ---
 const edit = (text = 'edited') => ({ text, editedAt: serverTimestamp() });

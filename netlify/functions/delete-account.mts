@@ -17,11 +17,14 @@ export default async (req: Request, _context?: unknown) => {
   const user = await verifyUser(req);
   if (!user) return json({ error: 'Please sign in again, then try deleting your account.' }, 401);
 
-  // Data first, then the login: if the second step fails the student can simply retry
-  // (both steps are safe to repeat), and no login is left pointing at half-deleted data.
+  // Data first, then the login: if a later step fails the student can simply retry
+  // (every step is safe to repeat), and no login is left pointing at half-deleted data.
   try {
     await adminAuth().revokeRefreshTokens(user.uid); // other devices stop refreshing right away
     const db = adminDb();
+    // Profile (and notes) first: without a profile the rules refuse new member posts,
+    // so nothing can slip in under the account while its messages are relabelled.
+    await db.recursiveDelete(db.collection('users').doc(user.uid));
     // Chat messages stay, but no longer point at the account: shown as "Former student",
     // with no member link, so only admins can change them from here on.
     const msgs = await db.collection('chatMessages').where('uid', '==', user.uid).get();
@@ -32,7 +35,6 @@ export default async (req: Request, _context?: unknown) => {
       );
       await batch.commit();
     }
-    await db.recursiveDelete(db.collection('users').doc(user.uid));
     await adminAuth().deleteUser(user.uid);
   } catch (err: any) {
     if (err?.code === 'auth/user-not-found') return json({ ok: true }); // already gone (a retry)

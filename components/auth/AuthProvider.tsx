@@ -14,7 +14,7 @@ interface AuthCtx extends AccountState {
 }
 
 const initial: AuthCtx = {
-  user: null, verified: false, isAdmin: false, displayName: '', loading: true, service: null, failed: false, retry: () => {},
+  user: null, verified: false, isAdmin: false, displayName: '', profileLoaded: false, loading: true, service: null, failed: false, retry: () => {},
 };
 const Ctx = createContext<AuthCtx>(initial);
 export const useAccount = () => useContext(Ctx);

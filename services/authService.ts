@@ -14,7 +14,7 @@ import {
   signOut as fbSignOut,
   type User,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 export const MAX_NAME = 40;
@@ -25,7 +25,14 @@ export interface AccountState {
   verified: boolean;
   isAdmin: boolean;
   displayName: string;
+  /** displayName came from the stored profile (chat posts must match it exactly) */
+  profileLoaded: boolean;
 }
+
+/** Names nobody can use (firestore.rules enforces the same list). */
+const RESERVED_NAMES = ['studio admin', 'former student'];
+export const isReservedName = (n: string) => RESERVED_NAMES.includes(n.trim().toLowerCase());
+const reservedNameError = () => Object.assign(new Error('reserved name'), { code: 'app/reserved-name' });
 
 const profileRef = (uid: string) => doc(db, 'users', uid);
 
@@ -45,7 +52,8 @@ const ensureProfile = (user: User, name?: string): Promise<void> => {
   const run = async () => {
     if (!stillSignedIn(user.uid)) return; // signed out / deleted meanwhile: don't resurrect the profile
     const ref = profileRef(user.uid);
-    const displayName = (name || user.displayName || user.email?.split('@')[0] || 'Dancer').trim().slice(0, MAX_NAME);
+    const picked = (name || user.displayName || user.email?.split('@')[0] || 'Dancer').trim().slice(0, MAX_NAME);
+    const displayName = isReservedName(picked) ? 'Dancer' : picked; // e.g. a Google account named "Studio Admin"
     const snap = await getDoc(ref);
     if (!snap.exists()) {
       try {
@@ -80,7 +88,7 @@ export const watchAccount = (onChange: (s: AccountState) => void) => {
     const mine = ++seq;
     const current = () => mine === seq && (user ? stillSignedIn(user.uid) : !auth.currentUser);
     if (!user) {
-      onChange({ user: null, verified: false, isAdmin: false, displayName: '' });
+      onChange({ user: null, verified: false, isAdmin: false, displayName: '', profileLoaded: false });
       return;
     }
     if (!refreshed) {
@@ -95,20 +103,25 @@ export const watchAccount = (onChange: (s: AccountState) => void) => {
     }
     const token = await user.getIdTokenResult();
     let displayName = user.displayName || '';
+    let profileLoaded = false;
     try {
       // Any sign-in path (popup, redirect, native app) gets a profile on first sight.
       if (current()) await ensureProfile(user);
       const snap = await getDoc(profileRef(user.uid));
-      if (snap.exists()) displayName = snap.data().displayName || displayName;
+      if (snap.exists()) {
+        displayName = snap.data().displayName || displayName;
+        profileLoaded = true;
+      }
     } catch (err) {
       console.error('Profile load failed', err);
     }
     if (!current()) return; // a newer sign-in state has already been reported
-    onChange({ user, verified: user.emailVerified, isAdmin: token.claims['admin'] === true, displayName });
+    onChange({ user, verified: user.emailVerified, isAdmin: token.claims['admin'] === true, displayName, profileLoaded });
   });
 };
 
 export const signUpWithEmail = async (name: string, email: string, password: string) => {
+  if (isReservedName(name)) throw reservedNameError();
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
   const displayName = name.trim().slice(0, MAX_NAME);
   // Verification email first, so a later hiccup can never leave the student without one.
@@ -161,19 +174,27 @@ export const renameAccount = async (name: string) => {
   const u = auth.currentUser;
   if (!u) return;
   const displayName = name.trim().slice(0, MAX_NAME);
+  if (isReservedName(displayName)) throw reservedNameError();
   await updateDoc(profileRef(u.uid), { displayName });
   await updateProfile(u, { displayName });
-  // Their chat messages show the account name, so follow the rename (rules check it
-  // matches the profile). Best effort: a failure here leaves old names, not a broken account.
+  // Their chat messages show the account name, so follow the rename (the rules check
+  // it matches the profile). Written in batches; if any batch fails the caller is told,
+  // since the account itself is already renamed.
+  let messagesOk = true;
   try {
     const mine = await getDocs(query(collection(db, 'chatMessages'), where('uid', '==', u.uid)));
-    await Promise.all(
-      mine.docs.filter(d => d.data().author !== displayName).map(d => updateDoc(d.ref, { author: displayName })),
-    );
+    const stale = mine.docs.filter(d => d.data().author !== displayName);
+    for (let i = 0; i < stale.length; i += 400) {
+      const batch = writeBatch(db);
+      stale.slice(i, i + 400).forEach(d => batch.update(d.ref, { author: displayName }));
+      await batch.commit();
+    }
   } catch (err) {
     console.error('Updating your name on chat messages failed', err);
+    messagesOk = false;
   }
   await u.getIdToken(true);
+  return { messagesOk };
 };
 
 export const signOut = () => fbSignOut(auth);
@@ -219,6 +240,8 @@ export const friendlyAuthError = (err: unknown): string => {
       return "Google sign-in isn't set up for this web address yet.";
     case 'auth/operation-not-allowed':
       return "That sign-in method isn't turned on yet.";
+    case 'app/reserved-name':
+      return 'That name is reserved. Please pick another one.';
     case 'auth/requires-recent-login':
       return 'For safety, sign out and back in, then try again.';
     default:

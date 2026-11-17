@@ -128,8 +128,11 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   // Who's posting: verified members post under their account name (and own their
   // messages); everyone else posts as a guest. Admin powers come from the role,
   // and the rules re-check all of this on the server.
-  const { user, verified, displayName, isAdmin } = useAccount();
-  const member = !!user && verified && !!displayName;
+  const { user, verified, displayName, isAdmin, profileLoaded } = useAccount();
+  // Member posts must match the stored profile name exactly, so wait until it has loaded.
+  const member = !!user && verified && profileLoaded && !!displayName;
+  // A verified account can't post as a guest (rules), so hold the composer until the profile is in.
+  const memberPending = !!user && verified && !profileLoaded;
   const role: ChatRole = isAdmin ? 'admin' : 'member';
   const postAs = member ? { uid: user!.uid, role } : undefined;
   const canModify = (c: Comment) => !c.deleted && (isAdmin || (member && c.uid === user!.uid));
@@ -138,7 +141,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
     if (!window.confirm('Delete this message?')) return;
     const t = toast.show('Deleting…', 'loading');
     try {
-      await deleteChatMessage(comment.id, comment.replies.length > 0);
+      await deleteChatMessage(comment.id);
       t.update('Deleted', 'success');
     } catch (err) {
       console.error(err);
@@ -390,6 +393,8 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                     change
                   </button>
                 </p>
+              ) : memberPending ? (
+                <p className="mb-1.5 px-1 text-[13px] text-text-lo">Loading your account…</p>
               ) : askName ? (
                 <div className="mb-2">
                   <label htmlFor="chat-name" className="sr-only">Your name</label>
@@ -427,7 +432,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                 />
                 <button
                   type="submit"
-                  disabled={(!member && !newAuthor.trim()) || !newText.trim() || posting}
+                  disabled={memberPending || (!member && !newAuthor.trim()) || !newText.trim() || posting}
                   aria-label="Post message"
                   data-tip="Post"
                   className="tip press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-strong text-white hover:bg-brand disabled:opacity-40 disabled:cursor-not-allowed"
