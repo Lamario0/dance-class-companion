@@ -285,7 +285,12 @@ const VerifyEmail: React.FC = () => {
 /* ------------------------------------------------------------------ */
 /* Signed in                                                          */
 /* ------------------------------------------------------------------ */
-const SignedIn: React.FC<{ onDone: () => void; registerGuard: (dirty: boolean) => void }> = ({ onDone, registerGuard }) => {
+const SignedIn: React.FC<{
+  onDone: () => void;
+  registerGuard: (dirty: boolean) => void;
+  /** runs the action, first asking "Discard your changes?" if a note has unsaved edits */
+  guard: (action: () => void) => void;
+}> = ({ onDone, registerGuard, guard }) => {
   const { user, displayName, isAdmin, service } = useAccount();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -399,10 +404,10 @@ const SignedIn: React.FC<{ onDone: () => void; registerGuard: (dirty: boolean) =
       </div>
 
       <div className="mt-6 space-y-2">
-        <button type="button" onClick={() => { service.signOut(); onDone(); }} className="btn-secondary press w-full">
+        <button type="button" onClick={() => guard(() => { service.signOut(); onDone(); })} className="btn-secondary press w-full">
           <LogOut className="h-4 w-4" /> Sign out
         </button>
-        <button type="button" onClick={() => setConfirmDelete(true)} className="press inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] text-[15px] font-semibold text-rose-300 hover:bg-rose-500/10">
+        <button type="button" onClick={() => guard(() => setConfirmDelete(true))} className="press inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] text-[15px] font-semibold text-rose-300 hover:bg-rose-500/10">
           <Trash2 className="h-4 w-4" /> Delete my account
         </button>
       </div>
@@ -434,10 +439,21 @@ export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({
   // The notebook reports unsaved edits here, so closing the sheet can ask first.
   const notesDirty = useRef(false);
   const registerGuard = useCallback((dirty: boolean) => { notesDirty.current = dirty; }, []);
-  const [askClose, setAskClose] = useState(false);
-  useEffect(() => { if (!open) setAskClose(false); }, [open]);
-  const requestClose = () => (notesDirty.current ? setAskClose(true) : onClose());
-  const discardAndClose = () => { notesDirty.current = false; setAskClose(false); onClose(); };
+  // Closing, signing out and deleting all pass through this, so unsaved note edits aren't lost silently.
+  const [pending, setPending] = useState<null | (() => void)>(null);
+  const askClose = pending !== null;
+  useEffect(() => { if (!open) setPending(null); }, [open]);
+  const guard = useCallback((action: () => void) => {
+    if (notesDirty.current) setPending(() => action);
+    else action();
+  }, []);
+  const requestClose = () => guard(onClose);
+  const discardAndClose = () => {
+    const action = pending;
+    notesDirty.current = false;
+    setPending(null);
+    action?.();
+  };
 
   const title = loading ? 'Your account' : failed ? 'Sign in' : !user ? 'Sign in' : !verified ? 'Almost there' : 'Your account';
   return (
@@ -447,7 +463,7 @@ export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({
           <p className="font-bold">Discard your changes?</p>
           <p className="mt-1 text-[15px] text-text-mid">Your edits to this note haven't been saved.</p>
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => setAskClose(false)} className="btn-primary press flex-1">Keep editing</button>
+            <button type="button" onClick={() => setPending(null)} className="btn-primary press flex-1">Keep editing</button>
             <button type="button" onClick={discardAndClose} className="btn-secondary press flex-1">Discard</button>
           </div>
         </div>
@@ -467,7 +483,7 @@ export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({
       ) : !verified ? (
         <VerifyEmail />
       ) : (
-        <SignedIn onDone={onClose} registerGuard={registerGuard} />
+        <SignedIn onDone={onClose} registerGuard={registerGuard} guard={guard} />
       )}
     </BottomSheet>
   );

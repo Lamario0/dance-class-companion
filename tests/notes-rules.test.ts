@@ -80,6 +80,18 @@ test('the owner can edit body/title but not re-tag a note', async () => {
   await assertFails(updateDoc(ref, { className: 'Other', updatedAt: serverTimestamp() }));
   await assertFails(updateDoc(ref, { body: 'x'.repeat(10001), updatedAt: serverTimestamp() }));
 });
+test('an offline re-create of the same class note is accepted as an overwrite (not dropped)', async () => {
+  await seed(CLASS_ID, classNote({ body: 'written on the laptop' }));
+  await assertSucceeds(setDoc(doc(verified('alice'), CLASS_ID), classNote({ body: 'written on the phone offline', pattern: 'Sugar Push v2' })));
+});
+test('...but not if it changes which class or week it is', async () => {
+  await seed(CLASS_ID, classNote());
+  await assertFails(setDoc(doc(verified('alice'), CLASS_ID), classNote({ className: 'Other class' })));
+  await assertFails(setDoc(doc(verified('alice'), CLASS_ID), classNote({ kind: 'free' })));
+});
+test('a free note cannot take a class-note id', () =>
+  assertFails(setDoc(doc(verified('alice'), 'users/alice/notes/wcs-201__2026-11-16'), freeNote())));
+
 test('the owner can delete; others cannot', async () => {
   await seed(CLASS_ID, classNote());
   await assertFails(deleteDoc(doc(verified('bob'), CLASS_ID)));

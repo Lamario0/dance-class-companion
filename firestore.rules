@@ -72,15 +72,23 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
           // class notes: id is "<classKey>__<weekOf>", so one entry per class per week
-          && (request.resource.data.kind == 'free'
+          && ((request.resource.data.kind == 'free'
+               // free notes can't take a class-note id and block that week's class note
+               && !noteId.matches('^.*__[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
               || (request.resource.data.weekOf.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
                   && request.resource.data.classKey.size() > 0
                   && noteId == request.resource.data.classKey + '__' + request.resource.data.weekOf));
 
+        // Edits change title/body. A device that was offline may also re-create a
+        // class note another device already made: accept that as an overwrite as
+        // long as it's the same note (kind, class, week unchanged), so the
+        // student's text isn't silently dropped on sync.
         allow update: if isVerifiedOwner()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt', 'pattern', 'createdAt'])
           && isText(request.resource.data.title, 80)
           && isText(request.resource.data.body, 10000)
+          && isText(request.resource.data.pattern, 300)
+          && (request.resource.data.createdAt == resource.data.createdAt || request.resource.data.createdAt == request.time)
           && request.resource.data.updatedAt == request.time;
 
         function isVerifiedOwner() {

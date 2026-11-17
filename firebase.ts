@@ -9,6 +9,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import {
   initializeFirestore,
+  getFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
   memoryLocalCache,
@@ -32,11 +33,28 @@ const makeDb = () => {
   try {
     return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
   } catch (err) {
+    // Already set up (this module evaluated twice, e.g. hot reload): reuse that instance.
+    if (String((err as Error)?.message).includes('already been called')) return getFirestore(app);
     console.warn('Offline cache unavailable, using memory cache', err);
     return initializeFirestore(app, { localCache: memoryLocalCache() });
   }
 };
 export const db = makeDb();
+
+// The SDK quietly falls back to memory when IndexedDB is blocked (some private-
+// browsing modes), and then offline writes are lost when the tab closes. Probe it
+// so the UI doesn't promise "will sync" when it can't.
+let persistent = typeof indexedDB !== 'undefined';
+if (persistent) {
+  try {
+    const req = indexedDB.open('dcc-offline-probe');
+    req.onerror = () => { persistent = false; };
+    req.onsuccess = () => req.result.close();
+  } catch {
+    persistent = false;
+  }
+}
+export const offlineCacheIsPersistent = () => persistent;
 export const auth = getAuth(app);
 
 // Local dev (.env.development.local): point at the emulators instead of production.

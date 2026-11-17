@@ -13,6 +13,8 @@ import {
   weekLabel,
   classKey,
   classNoteId,
+  onNoteSyncError,
+  offlineCacheIsPersistent,
   MAX_BODY,
   MAX_TITLE,
   type Note,
@@ -25,8 +27,14 @@ import {
 
 const useNotes = () => {
   const { user } = useAccount();
+  const toast = useToast();
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [error, setError] = useState(false);
+  // A save that looked fine offline can still be refused when it syncs: say so.
+  useEffect(
+    () => onNoteSyncError(() => toast.show("A note couldn't sync. Open it to check your latest text.", 'error')),
+    [toast],
+  );
   useEffect(() => {
     if (!user) return;
     setNotes(null);
@@ -81,14 +89,36 @@ const NoteEditor: React.FC<EditorProps> = ({ uid, note, draft, heading, onDirtyC
 
   const isFree = draft.kind === 'free';
 
+  // The note's text when this editor started (or last saved). If the stored note
+  // changes underneath (another device) while editing, Save keeps both texts.
+  const [startBody, setStartBody] = useState<string | null>(note?.body ?? null);
+
   const save = async () => {
     if (!dirty || busy) return;
     setBusy('save');
     setError('');
+    let toSave = body;
+    const remote = note?.body ?? '';
+    if (note && remote !== (startBody ?? '') && remote.trim() && !body.includes(remote)) {
+      toSave = `${remote}\n\n${body}`;
+    }
     try {
-      const { id, synced } = await saveNote(uid, { ...draft, body, title }, note?.id ?? savedId);
+      const { id, synced, merged: mergedOnServer, body: savedBody } = await saveNote(uid, { ...draft, body: toSave, title }, note?.id ?? savedId);
+      const merged = mergedOnServer || toSave !== body;
+      const finalBody = savedBody;
+      setStartBody(finalBody);
       setSavedId(id);
-      toast.show(synced ? 'Saved' : 'Saved on this device, will sync', 'success');
+      if (finalBody !== body) setBody(finalBody); // merged with the other device's text
+      toast.show(
+        merged
+          ? 'Saved: added to the note from your other device'
+          : synced
+            ? 'Saved'
+            : offlineCacheIsPersistent()
+              ? 'Saved on this device, will sync'
+              : "Saved for now. Keep this page open until you're back online",
+        'success',
+      );
       onSaved?.(id);
     } catch (err) {
       console.error(err);
@@ -287,7 +317,8 @@ export const ClassNotesSheet: React.FC<{ open: boolean; onClose: () => void; cla
       ) : (
         <>
           <NoteEditor
-            key={`${session}-${thisWeek?.id ?? `new-${thisWeekId}`}`}
+            // Stable per opening: this week's note arriving from the server must not remount (and wipe) the editor.
+            key={`${session}-${thisWeekId}`}
             uid={uid}
             note={thisWeek}
             draft={{ kind: 'class', className, pattern, weekOf: week, body: '' }}

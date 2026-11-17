@@ -16,6 +16,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  getDocFromServer,
   serverTimestamp,
   Timestamp,
   type FirestoreError,
@@ -60,14 +61,23 @@ export const weekLabel = (week: string) => {
   return new Date(y, mo - 1, da).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
+/** Short stable hash, so names with no Latin letters still get distinct keys. */
+const hash = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+};
+
 /** Stable key for a class from its name: "WCS Intermediate 201" -> "wcs-intermediate-201". */
-export const classKey = (name: string) =>
-  name
+export const classKey = (name: string) => {
+  const slug = name
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 60) || 'class';
+    .slice(0, 50);
+  return slug || `class-${hash(name.trim().toLowerCase())}`;
+};
 
 export const classNoteId = (name: string, week = weekOf()) => `${classKey(name)}__${week}`;
 
@@ -114,6 +124,10 @@ export interface NoteDraft {
 }
 
 const CONFIRM_WAIT_MS = 2500;
+const SERVER_CHECK_MS = 1500;
+
+/** Whether "saved on this device" survives closing the tab (false in some private-browsing modes). */
+export { offlineCacheIsPersistent } from '../firebase';
 
 /**
  * Create or update a note. Resolves with `synced: false` when the write is only
@@ -124,12 +138,14 @@ export const saveNote = async (
   uid: string,
   draft: NoteDraft,
   existingId: string | null,
-): Promise<{ id: string; synced: boolean }> => {
+): Promise<{ id: string; synced: boolean; merged: boolean; body: string }> => {
   const body = draft.body.slice(0, MAX_BODY);
   const title = (draft.title ?? '').trim().slice(0, MAX_TITLE);
   let id: string;
   let write: Promise<void>;
 
+  let merged = false;
+  let finalBody = body;
   if (existingId) {
     id = existingId;
     write = updateDoc(doc(notesCol(uid), id), { body, title, updatedAt: serverTimestamp() });
@@ -137,17 +153,41 @@ export const saveNote = async (
     const isClass = draft.kind === 'class';
     const week = draft.weekOf || weekOf();
     id = isClass ? classNoteId(draft.className || '', week) : doc(notesCol(uid)).id;
-    write = setDoc(doc(notesCol(uid), id), {
-      kind: draft.kind,
-      classKey: isClass ? classKey(draft.className || '') : '',
-      className: isClass ? (draft.className || '').slice(0, 100) : '',
-      pattern: isClass ? (draft.pattern || '').slice(0, 300) : '',
-      weekOf: isClass ? week : '',
-      title,
-      body,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    const ref = doc(notesCol(uid), id);
+
+    // This device saw no note for this class+week, but another device may have
+    // written one that hasn't reached this cache yet. If the server is reachable,
+    // add to that note instead of replacing it.
+    let existing: string | null = null;
+    if (isClass) {
+      const snap = await Promise.race([
+        getDocFromServer(ref).catch(() => null),
+        new Promise<null>(r => setTimeout(() => r(null), SERVER_CHECK_MS)),
+      ]);
+      if (snap?.exists()) existing = (snap.data().body as string) ?? '';
+    }
+
+    if (existing !== null) {
+      merged = true;
+      const combined = !existing.trim() || existing.includes(body) ? (existing.trim() ? existing : body) : `${existing}\n\n${body}`;
+      finalBody = combined.slice(0, MAX_BODY);
+      write = updateDoc(ref, { body: finalBody, title, updatedAt: serverTimestamp() });
+    } else {
+      // Offline (or a new note): create it. If the server turns out to have one
+      // after all, the rules accept this as a same-identity overwrite instead of
+      // dropping the student's text.
+      write = setDoc(ref, {
+        kind: draft.kind,
+        classKey: isClass ? classKey(draft.className || '') : '',
+        className: isClass ? (draft.className || '').slice(0, 100) : '',
+        pattern: isClass ? (draft.pattern || '').slice(0, 300) : '',
+        weekOf: isClass ? week : '',
+        title,
+        body,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
   }
 
   // Offline the write promise only settles once the server confirms, so don't
@@ -160,10 +200,20 @@ export const saveNote = async (
   const timeout = new Promise<false>(r => setTimeout(() => r(false), CONFIRM_WAIT_MS));
   const synced = await Promise.race([confirmed, timeout]);
   if (!synced && !settled) {
-    // Still surface a later refusal (rules) in the console; the snapshot listener drops the note.
-    confirmed.catch(err => console.error('Note sync was refused', err));
+    // A refusal can still arrive later (e.g. after reconnecting): tell the UI.
+    confirmed.catch(err => {
+      console.error('Note sync was refused', err);
+      [...syncErrorListeners].pop()?.(); // one toast, even with several notes views open
+    });
   }
-  return { id, synced };
+  return { id, synced, merged, body: finalBody };
+};
+
+/* Late sync failures (after the UI already said "saved on this device"). */
+const syncErrorListeners = new Set<() => void>();
+export const onNoteSyncError = (listener: () => void) => {
+  syncErrorListeners.add(listener);
+  return () => syncErrorListeners.delete(listener);
 };
 
 export const deleteNote = (uid: string, id: string) => {
