@@ -33,8 +33,8 @@ Only the current slice is specced. Later ones are specced when reached.
 | 2 | Notes: "my notes" on each class card + a free notebook, private to each student | done 2026-11-17 (PR #3) |
 | 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | done 2026-11-17 (PR #4) |
 | 3.5 | Left menu: hamburger drawer for signed-in users; notes move to a full Notes page; Admin section placeholder | done 2026-11-17 (PR #6) |
-| 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email (lives in the left menu's Admin section) | specced below |
-| 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | specced below |
+| 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email (lives in the left menu's Admin section) | done 2026-11-17 (PR #7) |
+| 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | done 2026-11-17 (PR #8); Play upload pending |
 
 ---
 
@@ -80,6 +80,14 @@ Only the current slice is specced. Later ones are specced when reached.
 | 7 | Notes, chat (member post/edit/delete) and offline notes work in the app | Lamarr on a phone |
 | 8 | The signed AAB is versionCode 11 / 1.2.0, signed with `dcc-release-key`, and accepted by Play internal testing | apksigner/jarsigner + Play Console |
 | 9 | `npm run build` passes; the website's main bundle stays under 320 kB (native plugin code not loaded on the web) | build output |
+
+### Result (2026-11-17)
+
+- 1, 9: website unchanged (relative API calls, plugin not loaded), main bundle 309 kB.
+- 2, 3, 4, 6, 7: Lamarr confirmed on a Galaxy Z Fold5 (1.2.0 installed over 1.1.0 via adb): native Google sign-in, email sign-in, notes, chat, Students & roles, delete account / calculator login from the app, back button.
+- 4, 5: 10 CORS tests; live check after merge: app-origin preflight 204, other origins 403.
+- 8: signed AAB/APK verified (versionCode 11 / 1.2.0, `dcc-release-key`). Play internal-testing upload still to do (Lamarr, Play Console).
+- Second check: no security issues; back-button, Escape-stacking and cancel-message findings fixed.
 
 ### Reference to match
 

@@ -27,7 +27,7 @@ Android: `npm run build && npx cap sync android`, then `gradlew bundleRelease` w
 
 - UI change -> check it in the browser preview at 375px and desktop before calling it done
 - Firestore rules change -> run the rules checks against the emulator before deploying
-- Android release -> bump `versionCode` above the highest in Play Console (last used: 10), then build the signed bundle
+- Android release -> bump `versionCode` above the highest used (last: 11, 1.2.0), then build the signed bundle; install on a phone with `adb install -r` (Play's app-signing key is the same `dcc-release-key`)
 
 Skill candidates (repeated work with no skill yet):
 - Android release (sync, bump version, build + verify signed AAB/APK)
