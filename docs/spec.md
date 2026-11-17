@@ -30,7 +30,7 @@ Only the current slice is specced. Later ones are specced when reached.
 | # | Slice | State |
 |---|---|---|
 | 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | done 2026-11-17 (PR #2) |
-| 2 | Notes: "my notes" on each class card + a free notebook, private to each student | specced below |
+| 2 | Notes: "my notes" on each class card + a free notebook, private to each student | done 2026-11-17 (PR #3) |
 | 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | not specced |
 | 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email | not specced |
 | 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | not specced |
@@ -89,6 +89,15 @@ Only the current slice is specced. Later ones are specced when reached.
 | 10 | Deleting the account removes all notes (regression of slice 1) | delete-account test |
 | 11 | `npm run build` passes; the main bundle stays under 320 kB (notes code loads lazily) | build output |
 | 12 | Works at 375px and desktop; tap targets 44px; the class cards stay equal height | browser preview |
+
+### Result (2026-11-17)
+
+All criteria met.
+- 1-8, 12: browser preview against the emulators (offline via Firestore's network toggle); Lamarr confirmed notes on the deploy preview against the live project.
+- 9: 12 notes-rules tests (29 tests total) pass; live rules spot-checked (notes 403 signed out, chat 200).
+- 10: covered by the slice 1 delete-account test (notes subcollection).
+- 11: main bundle 301 kB; notes code is a 13 kB lazy chunk.
+- Second check: the fresh-context reviewer found two data-loss paths (offline re-create dropped on sync; editor remount wiping typed text) plus smaller issues; all fixed and re-tested in the browser. While testing, "Keep editing" losing text and discarded text returning on reopen were also found and fixed.
 
 ### Reference to match
 
