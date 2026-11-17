@@ -30,10 +30,88 @@ Only the current slice is specced. Later ones are specced when reached.
 | # | Slice | State |
 |---|---|---|
 | 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | done 2026-11-17 (PR #2) |
-| 2 | Notes: "my notes" on each class card + a free notebook, private to each student | not specced |
+| 2 | Notes: "my notes" on each class card + a free notebook, private to each student | done 2026-11-17 (PR #3) |
 | 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | not specced |
 | 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email | not specced |
 | 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | not specced |
+
+---
+
+## Slice 2 - Notes
+
+### What it does
+
+- Each class card gets a small **My notes** button. Signed out, it opens the
+  sign-in sheet; signed in but unverified, it opens the "Check your email"
+  step; otherwise it opens a sheet titled with the class name.
+- The class sheet shows **this week's note** for that class: a dated entry
+  tagged with the week and the pattern on the card ("Week of Nov 17 · Sugar
+  Push w/ Spring"). Below it, the student's earlier weekly entries for that
+  class, newest first. Tapping one opens it to read, edit or delete.
+- Notes save with a **Save** button. Closing with unsaved changes asks
+  "Discard your changes?". Saving works offline: the note is kept on the
+  device and syncs when the connection is back, and the sheet says so.
+- The account sheet's "coming next" panel becomes **My notes**: class notes
+  grouped by class (newest first), then free notes, plus **New note** for a
+  free note with an optional title. Opening a note there uses the same
+  editor.
+- Notes are private: only their owner can read or change them, and deleting
+  the account deletes them (already built in slice 1).
+
+### Confirmed decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Class note shape | One dated entry per class per week, tagged with that week's pattern | User choice: builds a history per class |
+| Week | Weeks start Monday; reopening a class in the same week reopens that week's entry | One entry per class per week, no duplicates |
+| Class identity | Keyed by the class name (the sheet has no stable class id); the note stores the class name and pattern as written that week | Notes survive the weekly sheet edits; a renamed class starts a new group, old notes stay readable |
+| Notebook home | Inside the account sheet; nav stays at 3 tabs | User choice |
+| Saving | Explicit Save button, with a discard-changes prompt | User choice |
+| Offline | Firestore offline cache; saves made offline sync later | User choice: studios often have bad signal |
+| Who can use it | Signed in with a verified email (Google counts as verified), enforced by Firestore rules | Slice 1 decision |
+| Data | `users/{uid}/notes/{noteId}`: kind (class/free), classKey, className, pattern, weekOf, title, body, createdAt, updatedAt | Lives under the profile, so account deletion removes it |
+| Limits | Body up to 10,000 characters, title up to 80 | Generous for class notes; keeps documents small |
+| Out of scope | Search, sharing, formatting/rich text, photos, admins reading student notes, Android (slice 5) | Keep the slice small |
+
+### Done means
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | Signed out, class cards look as before apart from a My notes button; tapping it opens the sign-in sheet | browser preview |
+| 2 | An unverified email account tapping My notes gets the "Check your email" step, and the rules reject its note writes | browser preview + rules test |
+| 3 | A verified student can write and Save this week's note on a class; it shows the week and the card's pattern, and survives reload | browser preview against the emulators |
+| 4 | Reopening the same class in the same week reopens that entry (no duplicate); an entry from an earlier week shows under "Earlier notes" | emulator (seeded earlier-week note) + browser |
+| 5 | Editing an earlier entry and saving updates it; deleting it (after confirming) removes it | browser preview |
+| 6 | Closing with unsaved changes asks "Discard your changes?"; Keep editing keeps the text | browser preview |
+| 7 | Account sheet > My notes lists class notes grouped by class and free notes; New note creates a free note with an optional title | browser preview |
+| 8 | Offline: with the network cut, Save shows "Saved on this device, will sync"; after reconnecting it reaches the database | browser preview (offline emulation) + emulator data check |
+| 9 | Rules: only the owner can read/write their notes; fields and sizes are validated; another student and guests are refused | rules tests against the emulator |
+| 10 | Deleting the account removes all notes (regression of slice 1) | delete-account test |
+| 11 | `npm run build` passes; the main bundle stays under 320 kB (notes code loads lazily) | build output |
+| 12 | Works at 375px and desktop; tap targets 44px; the class cards stay equal height | browser preview |
+
+### Result (2026-11-17)
+
+All criteria met.
+- 1-8, 12: browser preview against the emulators (offline via Firestore's network toggle); Lamarr confirmed notes on the deploy preview against the live project.
+- 9: 12 notes-rules tests (29 tests total) pass; live rules spot-checked (notes 403 signed out, chat 200).
+- 10: covered by the slice 1 delete-account test (notes subcollection).
+- 11: main bundle 301 kB; notes code is a 13 kB lazy chunk.
+- Second check: the fresh-context reviewer found two data-loss paths (offline re-create dropped on sync; editor remount wiping typed text) plus smaller issues; all fixed and re-tested in the browser. While testing, "Keep editing" losing text and discarded text returning on reopen were also found and fixed.
+
+### Reference to match
+
+Slice 1's account sheet (`components/auth/AccountSheet.tsx`) and the bottom
+sheet pattern; class cards in `components/ClassesView.tsx`.
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff.
+
+### Open questions
+
+- None. (Week starts Monday and class-name keys are proposed above; change
+  them at approval if you prefer otherwise.)
 
 ---
 

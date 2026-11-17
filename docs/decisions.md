@@ -27,6 +27,20 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Firebase project: the app's project is display name "dance class companion", ID `dance-class-companion`. The project displayed as "dance-class-companion" (ID `gen-lang-client-0566172369`) is the old AI Studio/Gemini project and is not used.
 - lamariow@gmail.com has the admin claim on the live project (2026-11-17).
 
+## 2026-11-17 - Slice 2 (Notes) spec approved
+
+- Class notes are one dated entry per class per week (weeks start Monday), tagged with that week's pattern; keyed by class name.
+- The notebook lives in the account sheet (nav stays at 3 tabs).
+- Explicit Save button with a discard-changes prompt.
+- Notes work offline (Firestore offline cache) and sync later.
+
+## 2026-11-17 - Slice 2 build notes
+
+- Two devices, same class + week: when the server is reachable, a save adds to the other device's text instead of replacing it (both the first save and a save after the note changed underneath). Known limit: if a device was offline and its cache never saw the other note, its sync replaces that note's text (accepted by the rules rather than silently dropped).
+- Late sync refusals (after "Saved on this device") show a toast. In private browsing (no IndexedDB) the wording says to keep the page open instead of "will sync".
+- Free notes can't take a class-note id; class names with no Latin letters get a hashed key.
+- Known, accepted: devices in different time zones may disagree on the week around Monday midnight; offline chat posts queued past the end of a quarter are refused by the TTL/quarter rules.
+
 ## Earlier (redesign and chat, Nov 2026)
 
 - Chat stored in Firestore `chatMessages`, current quarter only, deleted by a TTL policy on `expireAt` (Blaze billing enabled 2026-11-05).
