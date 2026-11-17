@@ -34,6 +34,12 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Explicit Save button with a discard-changes prompt.
 - Notes work offline (Firestore offline cache) and sync later.
 
+## 2026-11-17 - Slice 3 (Chat identity) spec approved
+
+- Members post under their account display name (edited in the account sheet); renaming updates their messages this quarter.
+- Moderation by admin accounts only, enforced by Firestore rules; the calculator passcode no longer moderates chat and `chat-moderate` is removed.
+- Own messages editable/deletable any time this quarter, marked "(edited)". Deleting a message with replies soft-deletes it ("This message was deleted").
+
 ## 2026-11-17 - Slice 2 build notes
 
 - Two devices, same class + week: when the server is reachable, a save adds to the other device's text instead of replacing it (both the first save and a save after the note changed underneath). Known limit: if a device was offline and its cache never saw the other note, its sync replaces that note's text (accepted by the rules rather than silently dropped).
