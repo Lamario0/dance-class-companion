@@ -40,6 +40,11 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Moderation by admin accounts only, enforced by Firestore rules; the calculator passcode no longer moderates chat and `chat-moderate` is removed.
 - Own messages editable/deletable any time this quarter, marked "(edited)". Deleting a message with replies soft-deletes it ("This message was deleted").
 
+## 2026-11-17 - Slice 3.5 (left menu)
+
+- Left menu for signed-in users only; My notes opens a full Notes page (not a nav tab); Admin section placeholder for slice 4; calculator stays on its passcode (only guarded against leaving unsaved notes).
+- Leaving the Notes page with unsaved edits asks first from every in-app path (nav tabs, menu, logo triple-tap, sign out, account delete); reload/close uses the browser's "Leave site?" prompt. Not done: the Notes page has no history entry, so the Android back button leaves the app (with the browser prompt where supported). Revisit with slice 5 (Android).
+
 ## 2026-11-17 - Slice 3 build notes
 
 - Chat deletes are always soft (text wiped, `deleted: true`); the UI hides them unless they have replies. Avoids orphaning a reply this device hasn't seen yet. TTL removes them with the quarter.

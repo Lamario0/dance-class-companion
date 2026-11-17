@@ -1,4 +1,5 @@
-import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useLeaveGuard } from '../menu/LeaveGuard';
 import { Mail, LogOut, Pencil, Check, X, ShieldCheck, Trash2, RotateCw, UserRound } from 'lucide-react';
 import { BottomSheet } from '../ui/BottomSheet';
 import { Segmented } from '../ui/Segmented';
@@ -8,8 +9,6 @@ import { useAccount } from './AuthProvider';
 
 const MIN_PASSWORD = 8;
 
-// The notebook pulls in Firestore, so it loads when a signed-in student opens the sheet.
-const Notebook = lazy(() => import('../notes/NotesUI').then(m => ({ default: m.Notebook })));
 
 const initials = (name: string, email?: string | null) =>
   (name || email || '?')
@@ -287,10 +286,9 @@ const VerifyEmail: React.FC = () => {
 /* ------------------------------------------------------------------ */
 const SignedIn: React.FC<{
   onDone: () => void;
-  registerGuard: (dirty: boolean) => void;
-  /** runs the action, first asking "Discard your changes?" if a note has unsaved edits */
+  /** runs the action, first asking "Discard your changes?" if the Notes page has unsaved edits */
   guard: (action: () => void) => void;
-}> = ({ onDone, registerGuard, guard }) => {
+}> = ({ onDone, guard }) => {
   const { user, displayName, isAdmin, service } = useAccount();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -348,7 +346,8 @@ const SignedIn: React.FC<{
           <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy === 'delete'} className="btn-secondary press flex-1">
             Keep my account
           </button>
-          <button type="button" onClick={doDelete} disabled={busy === 'delete'} className="btn-primary press flex-1 !bg-rose-600 hover:!bg-rose-500">
+          {/* Guard the actual delete (not the confirm step), so cancelling can't switch the guard off. */}
+          <button type="button" onClick={() => guard(() => { void doDelete(); })} disabled={busy === 'delete'} className="btn-primary press flex-1 !bg-rose-600 hover:!bg-rose-500">
             {busy === 'delete' ? <DancingDots label="Deleting" dotClass="bg-white" /> : 'Delete forever'}
           </button>
         </div>
@@ -401,17 +400,11 @@ const SignedIn: React.FC<{
 
       {error && <p role="alert" className="mt-3 rounded-[var(--radius-sm)] bg-rose-500/10 px-3 py-2 text-[15px] text-rose-200">{error}</p>}
 
-      <div className="mt-6 border-t border-line pt-5">
-        <Suspense fallback={<div className="flex justify-center py-6"><DancingDots label="Loading your notes" /></div>}>
-          <Notebook registerGuard={registerGuard} />
-        </Suspense>
-      </div>
-
       <div className="mt-6 space-y-2">
         <button type="button" onClick={() => guard(() => { service.signOut(); onDone(); })} className="btn-secondary press w-full">
           <LogOut className="h-4 w-4" /> Sign out
         </button>
-        <button type="button" onClick={() => guard(() => setConfirmDelete(true))} className="press inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] text-[15px] font-semibold text-rose-300 hover:bg-rose-500/10">
+        <button type="button" onClick={() => setConfirmDelete(true)} className="press inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] text-[15px] font-semibold text-rose-300 hover:bg-rose-500/10">
           <Trash2 className="h-4 w-4" /> Delete my account
         </button>
       </div>
@@ -440,38 +433,12 @@ export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({
     return () => window.removeEventListener('focus', onFocus);
   }, [open, user, verified, service]);
 
-  // The notebook reports unsaved edits here, so closing the sheet can ask first.
-  const notesDirty = useRef(false);
-  const registerGuard = useCallback((dirty: boolean) => { notesDirty.current = dirty; }, []);
-  // Closing, signing out and deleting all pass through this, so unsaved note edits aren't lost silently.
-  const [pending, setPending] = useState<null | (() => void)>(null);
-  const askClose = pending !== null;
-  useEffect(() => { if (!open) setPending(null); }, [open]);
-  const guard = useCallback((action: () => void) => {
-    if (notesDirty.current) setPending(() => action);
-    else action();
-  }, []);
-  const requestClose = () => guard(onClose);
-  const discardAndClose = () => {
-    const action = pending;
-    notesDirty.current = false;
-    setPending(null);
-    action?.();
-  };
+  // Signing out or deleting the account leaves the Notes page: ask first about unsaved edits there.
+  const { guardLeave } = useLeaveGuard();
 
   const title = loading ? 'Your account' : failed ? 'Sign in' : !user ? 'Sign in' : !verified ? 'Almost there' : 'Your account';
   return (
-    <BottomSheet open={open} onClose={requestClose} title={title} size="sm">
-      {askClose && (
-        <div role="alertdialog" aria-label="Discard your changes?" className="mb-5 rounded-[var(--radius-md)] bg-amber-500/10 p-4 animate-fade">
-          <p className="font-bold">Discard your changes?</p>
-          <p className="mt-1 text-[15px] text-text-mid">Your edits to this note haven't been saved.</p>
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => setPending(null)} className="btn-primary press flex-1">Keep editing</button>
-            <button type="button" onClick={discardAndClose} className="btn-secondary press flex-1">Discard</button>
-          </div>
-        </div>
-      )}
+    <BottomSheet open={open} onClose={onClose} title={title} size="sm">
       {loading ? (
         <Loading />
       ) : failed ? (
@@ -487,7 +454,7 @@ export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({
       ) : !verified ? (
         <VerifyEmail />
       ) : (
-        <SignedIn onDone={onClose} registerGuard={registerGuard} guard={guard} />
+        <SignedIn onDone={onClose} guard={guardLeave} />
       )}
     </BottomSheet>
   );

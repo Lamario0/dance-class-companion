@@ -41,7 +41,9 @@ export enum Tab {
   MEDIA = 'MEDIA',
   ANNOUNCEMENTS = 'ANNOUNCEMENTS',
   SETTINGS = 'SETTINGS',
-  CALCULATOR = 'CALCULATOR'
+  CALCULATOR = 'CALCULATOR',
+  /** reached from the left menu, not a nav tab */
+  NOTES = 'NOTES'
 }
 
 export interface AIResponse {

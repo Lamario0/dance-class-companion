@@ -5,6 +5,7 @@ import { BottomSheet } from '../ui/BottomSheet';
 import { DancingDots, EmptyState, NoteDoodle } from '../ui/Doodles';
 import { useToast } from '../ui/Toast';
 import { useAccount } from '../auth/AuthProvider';
+import { useLeaveGuard } from '../menu/LeaveGuard';
 import {
   subscribeNotes,
   saveNote,
@@ -349,20 +350,47 @@ export const ClassNotesSheet: React.FC<{ open: boolean; onClose: () => void; cla
 /* ------------------------------------------------------------------ */
 
 /**
- * All of the student's notes: class notes grouped by class, then free notes.
- * `registerGuard` lets the account sheet ask "Discard your changes?" before closing.
+ * The Notes page (spec slice 3.5), opened from the left menu: class notes grouped
+ * by class, then free notes. Unsaved edits are reported to the leave guard, so
+ * nav tabs, the menu and signing out ask "Discard your changes?" first.
  */
-export const Notebook: React.FC<{ registerGuard: (dirty: boolean) => void }> = ({ registerGuard }) => {
+export const NotesPage: React.FC<{ onOpenAccount: () => void }> = ({ onOpenAccount }) => {
+  const { user, verified } = useAccount();
+  if (!user) return null;
+  return (
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6">
+        <p className="eyebrow">Your notebook</p>
+        <h2 className="mt-1 text-[28px] font-extrabold leading-tight tracking-tight md:text-4xl">My notes</h2>
+      </div>
+      {verified ? (
+        <Notebook />
+      ) : (
+        <div className="card">
+          <EmptyState
+            doodle="notes"
+            title="Verify your email to start taking notes."
+            body="We sent you a link when you signed up."
+            action={<button type="button" onClick={onOpenAccount} className="btn-primary press">Open my account</button>}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Notebook: React.FC = () => {
   const { notes, error, uid } = useNotes();
+  const { setNotesDirty } = useLeaveGuard();
   const [view, setView] = useState<null | { id: string | null }>(null); // null = list; id null = new free note
   const [dirty, setDirty] = useState(false);
   const [askDiscard, setAskDiscard] = useState<null | (() => void)>(null);
-  useEffect(() => registerGuard(dirty), [dirty, registerGuard]);
-  useEffect(() => () => registerGuard(false), [registerGuard]);
+  useEffect(() => setNotesDirty(dirty), [dirty, setNotesDirty]);
+  useEffect(() => () => setNotesDirty(false), [setNotesDirty]);
 
   if (!uid) return null;
-  if (error) return <EmptyState compact doodle="swirl" title="Couldn't load your notes." body="Check your connection and try again." />;
-  if (!notes) return <div className="flex justify-center py-6"><DancingDots label="Loading your notes" /></div>;
+  if (error) return <div className="card"><EmptyState compact doodle="swirl" title="Couldn't load your notes." body="Check your connection and try again." /></div>;
+  if (!notes) return <div className="flex justify-center py-10"><DancingDots label="Loading your notes" /></div>;
 
   const guard = (action: () => void) => () => (dirty ? setAskDiscard(() => action) : action());
   const back = guard(() => { setDirty(false); setView(null); });
@@ -375,7 +403,7 @@ export const Notebook: React.FC<{ registerGuard: (dirty: boolean) => void }> = (
     const note = view.id ? notes.find(n => n.id === view.id) ?? null : null;
     const isClass = note?.kind === 'class';
     return (
-      <>
+      <div className="card p-5 md:p-6">
       {prompt}
       <NoteEditor
         key={view.id ?? 'new'}
@@ -397,7 +425,7 @@ export const Notebook: React.FC<{ registerGuard: (dirty: boolean) => void }> = (
           </div>
         }
       />
-      </>
+      </div>
     );
   }
 
@@ -410,9 +438,9 @@ export const Notebook: React.FC<{ registerGuard: (dirty: boolean) => void }> = (
   const free = notes.filter(n => n.kind === 'free');
 
   return (
-    <div>
+    <div className="card p-5 md:p-6">
       <div className="mb-2 flex items-center justify-between">
-        <p className="flex items-center gap-2 font-bold"><NotebookPen className="h-5 w-5 text-brand-soft" /> My notes</p>
+        <p className="flex items-center gap-2 font-bold"><NotebookPen className="h-5 w-5 text-brand-soft" /> {notes.length} {notes.length === 1 ? 'note' : 'notes'}</p>
         <button type="button" onClick={() => setView({ id: null })} className="btn-secondary press !min-h-11 !px-3 text-[15px]">
           <Plus className="h-4 w-4" /> New note
         </button>
@@ -423,7 +451,7 @@ export const Notebook: React.FC<{ registerGuard: (dirty: boolean) => void }> = (
           <p>No notes yet. Tap <span className="font-semibold text-text-hi">My notes</span> on a class card, or start a free note here.</p>
         </div>
       ) : (
-        <div className="max-h-[45vh] overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
+        <div>
           {[...classGroups.entries()].map(([name, list]) => (
             <section key={name} className="mt-3">
               <p className="eyebrow mb-1">{name}</p>
