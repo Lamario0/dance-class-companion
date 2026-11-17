@@ -37,11 +37,13 @@ interface SideMenuProps {
   onClose: () => void;
   onNotes: () => void;
   onAccount: () => void;
+  /** admins only: the Students & roles page */
+  onStudents: () => void;
   /** the header button, so focus can return to it */
   returnFocusTo: React.RefObject<HTMLButtonElement>;
 }
 
-export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAccount, returnFocusTo }) => {
+export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAccount, onStudents, returnFocusTo }) => {
   const { user, displayName, isAdmin } = useAccount();
   const panelRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(open);
@@ -197,13 +199,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAc
           {isAdmin && (
             <section aria-label="Admin" className="mt-6 border-t border-line pt-4">
               <p className="eyebrow mb-2 flex items-center gap-1.5 px-3"><ShieldCheck className="h-3.5 w-3.5" /> Admin</p>
-              <div className="flex min-h-12 items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-text-lo">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-2"><Users className="h-[18px] w-[18px]" /></span>
-                <span>
-                  <span className="block font-semibold text-text-mid">Students &amp; roles</span>
-                  <span className="block text-[13px]">Coming next</span>
-                </span>
-              </div>
+              {item('Students & roles', <Users className="h-[18px] w-[18px]" />, onStudents, 'Accounts, admins')}
             </section>
           )}
         </nav>
