@@ -5,8 +5,21 @@ import assert from 'node:assert/strict';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
 process.env.GCLOUD_PROJECT = 'dance-class-companion';
+process.env.DCC_USE_EMULATORS = '1';
 
-const { adminAuth, adminDb } = await import('../netlify/lib/firebaseAdmin.mts');
+const { adminAuth, adminDb, adminConfigured } = await import('../netlify/lib/firebaseAdmin.mts');
+
+test('emulator mode never switches on inside Netlify, even with emulator vars set', () => {
+  assert.equal(adminConfigured(), true); // local opt-in + emulator hosts
+  for (const v of ['NETLIFY', 'AWS_LAMBDA_FUNCTION_NAME', 'CONTEXT']) {
+    process.env[v] = 'true';
+    assert.equal(adminConfigured(), false, `${v} should disable emulator mode`);
+    delete process.env[v];
+  }
+  delete process.env.DCC_USE_EMULATORS;
+  assert.equal(adminConfigured(), false, 'emulator hosts alone must not enable it');
+  process.env.DCC_USE_EMULATORS = '1';
+});
 const { default: deleteAccount } = await import('../netlify/functions/delete-account.mts');
 
 const AUTH = 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1';

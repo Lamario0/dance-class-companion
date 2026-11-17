@@ -35,6 +35,11 @@ test('names must be 1-40 characters', async () => {
   await assertFails(setDoc(doc(alice(), 'users/alice'), profile('x'.repeat(41))));
 });
 
+test('re-creating an existing profile is denied (the client must not double-create)', async () => {
+  await seedAlice();
+  await assertFails(setDoc(doc(alice(), 'users/alice'), profile()));
+});
+
 test('a student can read their own profile', async () => {
   await seedAlice();
   await assertSucceeds(getDoc(doc(alice(), 'users/alice')));

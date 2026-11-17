@@ -16,6 +16,13 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Class attendance / QR check-in is the next project, after accounts.
 - Guardrails: ask before pushing to `main` and before recursive deletes.
 
+## 2026-11-17 - Slice 1 build notes
+
+- Profiles are created by the account watcher for every sign-in path (popup, redirect, native), serialized per account so two writes never collide.
+- Admin rights must always be enforced by Firestore rules / server checks on `request.auth.token.admin`, never by the UI badge (which can lag until the next page load). Applies to slices 3-4.
+- Server functions only use the emulators with an explicit local opt-in (`DCC_USE_EMULATORS=1`) and never inside Netlify.
+- Google's redirect fallback needs authDomain on our own domain: proxy rules are in `netlify.toml`; switching on needs `VITE_FIREBASE_AUTH_DOMAIN=danceclasscompanion.com` in Netlify plus the OAuth redirect URI (user action, pending). The popup path works without it.
+
 ## Earlier (redesign and chat, Nov 2026)
 
 - Chat stored in Firestore `chatMessages`, current quarter only, deleted by a TTL policy on `expireAt` (Blaze billing enabled 2026-11-05).

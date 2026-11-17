@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Mail, LogOut, Pencil, Check, X, ShieldCheck, Trash2, RotateCw, UserRound } from 'lucide-react';
 import { BottomSheet } from '../ui/BottomSheet';
 import { Segmented } from '../ui/Segmented';
-import { DancingDots, SparkleDoodle, NoteDoodle } from '../ui/Doodles';
+import { DancingDots, SparkleDoodle, NoteDoodle, EmptyState } from '../ui/Doodles';
 import { useToast } from '../ui/Toast';
 import { useAccount } from './AuthProvider';
 
@@ -416,7 +416,7 @@ const Loading = () => (
 /* The sheet                                                          */
 /* ------------------------------------------------------------------ */
 export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
-  const { user, verified, loading, service } = useAccount();
+  const { user, verified, loading, service, failed, retry } = useAccount();
 
   // Opening the sheet (or coming back to the tab) re-checks whether the email link was clicked.
   useEffect(() => {
@@ -427,10 +427,26 @@ export const AccountSheet: React.FC<{ open: boolean; onClose: () => void }> = ({
     return () => window.removeEventListener('focus', onFocus);
   }, [open, user, verified, service]);
 
-  const title = loading ? 'Your account' : !user ? 'Sign in' : !verified ? 'Almost there' : 'Your account';
+  const title = loading ? 'Your account' : failed ? 'Sign in' : !user ? 'Sign in' : !verified ? 'Almost there' : 'Your account';
   return (
     <BottomSheet open={open} onClose={onClose} title={title} size="sm">
-      {loading ? <Loading /> : !user ? <SignedOut /> : !verified ? <VerifyEmail /> : <SignedIn onDone={onClose} />}
+      {loading ? (
+        <Loading />
+      ) : failed ? (
+        <EmptyState
+          compact
+          doodle="swirl"
+          title="Couldn't load sign-in."
+          body="Check your connection and try again. Everything else keeps working."
+          action={<button type="button" onClick={retry} className="btn-primary press"><RotateCw className="h-4 w-4" /> Try again</button>}
+        />
+      ) : !user ? (
+        <SignedOut />
+      ) : !verified ? (
+        <VerifyEmail />
+      ) : (
+        <SignedIn onDone={onClose} />
+      )}
     </BottomSheet>
   );
 };

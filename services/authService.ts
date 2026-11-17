@@ -29,17 +29,42 @@ export interface AccountState {
 
 const profileRef = (uid: string) => doc(db, 'users', uid);
 
-/** Create users/{uid} the first time we see an account (email sign-up or first Google sign-in). */
-const ensureProfile = async (user: User, name?: string) => {
-  const ref = profileRef(user.uid);
-  const snap = await getDoc(ref);
-  const displayName = (name || user.displayName || user.email?.split('@')[0] || 'Dancer').trim().slice(0, MAX_NAME);
-  if (!snap.exists()) {
-    await setDoc(ref, { displayName, createdAt: serverTimestamp() });
-  } else if (name && snap.data().displayName !== displayName) {
-    // Sign-up raced the watcher, which created the profile before the name was set.
-    await updateDoc(ref, { displayName });
-  }
+/** The signed-in user is still `uid` (guards writes and state updates against sign-out/delete races). */
+const stillSignedIn = (uid: string) => auth.currentUser?.uid === uid;
+
+// One profile write at a time per account: the watcher and sign-up can both reach
+// ensureProfile at once, and two "create" writes would collide (the second is an
+// update the rules reject).
+const profileLocks = new Map<string, Promise<void>>();
+
+/**
+ * Create users/{uid} the first time we see an account (any sign-in path), or set
+ * its name when `name` is given (email sign-up). Safe to call concurrently.
+ */
+const ensureProfile = (user: User, name?: string): Promise<void> => {
+  const run = async () => {
+    if (!stillSignedIn(user.uid)) return; // signed out / deleted meanwhile: don't resurrect the profile
+    const ref = profileRef(user.uid);
+    const displayName = (name || user.displayName || user.email?.split('@')[0] || 'Dancer').trim().slice(0, MAX_NAME);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      try {
+        await setDoc(ref, { displayName, createdAt: serverTimestamp() });
+        return;
+      } catch (err: any) {
+        // Created elsewhere (another tab) between our read and write: fall through to the name check.
+        if (err?.code !== 'permission-denied') throw err;
+      }
+    }
+    if (name) {
+      const current = (await getDoc(ref)).data()?.displayName;
+      if (current !== displayName) await updateDoc(ref, { displayName });
+    }
+  };
+  const prev = profileLocks.get(user.uid) ?? Promise.resolve();
+  const next = prev.catch(() => {}).then(run);
+  profileLocks.set(user.uid, next);
+  return next;
 };
 
 /** Live account state. Fires on sign-in/out and whenever the ID token refreshes (claims, verification). */
@@ -49,7 +74,11 @@ export const watchAccount = (onChange: (s: AccountState) => void) => {
 
   // A role granted while someone was away lives in a fresh token only, so refresh once per page load.
   let refreshed = false;
+  // Callbacks are async and can finish out of order; only the newest one may report.
+  let seq = 0;
   return onIdTokenChanged(auth, async user => {
+    const mine = ++seq;
+    const current = () => mine === seq && (user ? stillSignedIn(user.uid) : !auth.currentUser);
     if (!user) {
       onChange({ user: null, verified: false, isAdmin: false, displayName: '' });
       return;
@@ -68,12 +97,13 @@ export const watchAccount = (onChange: (s: AccountState) => void) => {
     let displayName = user.displayName || '';
     try {
       // Any sign-in path (popup, redirect, native app) gets a profile on first sight.
-      await ensureProfile(user);
+      if (current()) await ensureProfile(user);
       const snap = await getDoc(profileRef(user.uid));
       if (snap.exists()) displayName = snap.data().displayName || displayName;
     } catch (err) {
       console.error('Profile load failed', err);
     }
+    if (!current()) return; // a newer sign-in state has already been reported
     onChange({ user, verified: user.emailVerified, isAdmin: token.claims['admin'] === true, displayName });
   });
 };
@@ -81,10 +111,14 @@ export const watchAccount = (onChange: (s: AccountState) => void) => {
 export const signUpWithEmail = async (name: string, email: string, password: string) => {
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
   const displayName = name.trim().slice(0, MAX_NAME);
-  // Set the name on the Auth account first: the watcher's ensureProfile copies it.
-  await updateProfile(cred.user, { displayName });
-  await ensureProfile(cred.user, displayName);
+  // Verification email first, so a later hiccup can never leave the student without one.
   await sendEmailVerification(cred.user);
+  await updateProfile(cred.user, { displayName });
+  try {
+    await ensureProfile(cred.user, displayName);
+  } catch (err) {
+    console.error('Saving the profile name failed', err); // the account itself is fine; the name can be fixed in the sheet
+  }
   await cred.user.getIdToken(true); // re-emit state with the name filled in
 };
 
@@ -95,9 +129,8 @@ export const signInWithGoogle = async () => {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   try {
-    const cred = await signInWithPopup(auth, provider);
-    await ensureProfile(cred.user);
-    await cred.user.getIdToken(true);
+    // The account watcher creates the profile, so a profile hiccup can't turn a good sign-in into an error.
+    await signInWithPopup(auth, provider);
   } catch (err: any) {
     // Some phone browsers and in-app browsers block popups: fall back to a full-page redirect.
     // (Reliable only once authDomain is our own domain via the /__/auth proxy in netlify.toml.)
