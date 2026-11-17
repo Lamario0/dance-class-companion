@@ -2,10 +2,11 @@
 // sign-in method, verified and admin. Names come from the profile (what the app
 // shows), falling back to the Auth display name.
 import { adminAuth, adminDb, adminConfigured, json, requireAdmin } from '../lib/firebaseAdmin.mts';
+import { withAppCors } from '../lib/cors.mts';
 
 const MAX_USERS = 5000;
 
-export default async (req: Request, _context?: unknown) => {
+export default withAppCors(async (req: Request, _context?: unknown) => {
   if (req.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
   if (!adminConfigured()) return json({ error: 'Admin tools are not configured.' }, 500);
   const auth = await requireAdmin(req);
@@ -42,7 +43,7 @@ export default async (req: Request, _context?: unknown) => {
   rows.sort((a, b) => (b.joined ?? '').localeCompare(a.joined ?? ''));
 
   return json({ users: rows, truncated: !!pageToken });
-};
+});
 
 export const config = {
   path: '/api/admin/users',

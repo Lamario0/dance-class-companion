@@ -8,6 +8,7 @@ import {
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
+  signInWithCredential,
   sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile,
@@ -16,6 +17,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { apiUrl, isNativeApp } from './platform';
 
 export const MAX_NAME = 40;
 
@@ -139,6 +141,16 @@ export const signInWithEmail = (email: string, password: string) =>
   signInWithEmailAndPassword(auth, email.trim(), password);
 
 export const signInWithGoogle = async () => {
+  if (isNativeApp()) {
+    // In the Android app: the native account picker, then sign the web SDK in with
+    // its Google ID token (popups/redirects don't work in an app WebView).
+    const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
+    const result = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true });
+    const idToken = result.credential?.idToken;
+    if (!idToken) throw Object.assign(new Error('Google sign-in was cancelled.'), { code: 'auth/popup-closed-by-user' });
+    await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+    return;
+  }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   try {
@@ -197,13 +209,24 @@ export const renameAccount = async (name: string) => {
   return { messagesOk };
 };
 
-export const signOut = () => fbSignOut(auth);
+export const signOut = async () => {
+  await fbSignOut(auth);
+  if (isNativeApp()) {
+    // Also forget the native Google session, so the account picker shows next time.
+    try {
+      const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
+      await FirebaseAuthentication.signOut();
+    } catch {
+      /* not signed in natively */
+    }
+  }
+};
 
 /** fetch() to our own /api/* functions with the signed-in user's ID token. */
 export const authedFetch = async (path: string, init: RequestInit = {}) => {
   const u = auth.currentUser;
   if (!u) throw new Error('Not signed in');
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers: { ...(init.headers || {}), Authorization: `Bearer ${await u.getIdToken()}`, 'Content-Type': 'application/json' },
   });
@@ -215,7 +238,7 @@ export const authedFetch = async (path: string, init: RequestInit = {}) => {
 export const deleteAccount = async () => {
   const u = auth.currentUser;
   if (!u) return;
-  const res = await fetch('/api/delete-account', {
+  const res = await fetch(apiUrl('/api/delete-account'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${await u.getIdToken()}` },
   });
