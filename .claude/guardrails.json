@@ -1,13 +1,17 @@
 {
   "_help": "Rules enforced by .claude/hooks/guard.mjs before a tool runs. 'never' blocks, 'ask' makes the user confirm. paths: globs relative to the project root ('secrets/' = that folder, '.env*' = any depth, '**/*.pem'); also absolute or ~/ paths. commands: case-insensitive regexes tested against Bash and PowerShell commands. Test a rule: node .claude/hooks/guard.mjs --check Write some/path",
-  "_rules": "Chosen 2026-11-17: ask before pushing/merging to main (auto-deploys the live site used in classes) and before any force push; ask before recursive deletes.",
+  "_rules": "Chosen 2026-11-17: ask before pushing/merging to main (auto-deploys the live site used in classes) and before any force push; ask before recursive deletes. Added for attendance: ask before editing the calculator (dance-party attendance) and before firebase deploys.",
   "never": {
     "paths": [],
     "commands": []
   },
   "ask": {
-    "paths": [],
+    "paths": [
+      "components/CalculatorView.tsx",
+      "services/spreadsheetService.ts"
+    ],
     "commands": [
+      "firebase(-tools)?(@\\S+)?\\s+deploy\\b",
       "git\\s+push\\b.*\\bmain\\b",
       "git\\s+push\\b.*(--force|\\s-f\\b)",
       "gh\\s+pr\\s+merge\\b",

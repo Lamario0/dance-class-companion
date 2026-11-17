@@ -2,6 +2,17 @@
 
 Dated log of confirmed decisions. Don't re-decide what is logged here.
 
+## 2026-11-17 - Attendance kickoff
+
+- Goal: headcount per class, student progress, and (later) progress toward levels. Not passes/payments.
+- QR codes are static and always open, one per **slot** (e.g. "Tue 7:00pm") created in the admin page; the slot's current class title can change without changing its QR. Once per slot per studio day (America/Detroit).
+- Signed-in, verified students check in by QR. People without an account are checked in only by admins (manual check-in, slice 2).
+- The Google Sheet syncs both ways (slice 3): check-ins become rows (date, time, slot, class, name; no email); slot titles can be changed in the sheet and are read back by the app.
+- Students get a "My attendance" page from the first slice; levels come later.
+- Check-ins go through a server function (`/api/checkin`); QR links are `https://danceclasscompanion.com/checkin/<slotId>`; QR codes generated in the browser.
+- Main bundle limit raised from 320 to 330 kB.
+- Guardrails added: ask before editing the calculator files and before `firebase deploy`.
+
 ## 2026-11-17 - Accounts kickoff
 
 - Roles are only **student** and **admin**; no instructor role. Admin is a Firebase custom claim, first granted to lamariow@gmail.com by script; admins can grant others (slice 4).
