@@ -40,6 +40,13 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Moderation by admin accounts only, enforced by Firestore rules; the calculator passcode no longer moderates chat and `chat-moderate` is removed.
 - Own messages editable/deletable any time this quarter, marked "(edited)". Deleting a message with replies soft-deletes it ("This message was deleted").
 
+## 2026-11-17 - Slice 5 (Android 1.2.0)
+
+- Native Google sign-in via @capacitor-firebase/authentication (skipNativeAuth), signing the web SDK in with the Google ID token. Requires both the upload key's and Play's app-signing key's SHA-1/SHA-256 on the Firebase Android app.
+- From the app, API calls go to https://danceclasscompanion.com; functions answer CORS only for https://localhost and capacitor://localhost (other Capacitor apps share that origin but can't get our tokens; accepted).
+- Back button: leave fullscreen video, close the top sheet, close the menu, otherwise move the app to the background (not kill it), so unsaved notes survive. Escape closes only the top sheet.
+- Follow-up (pre-existing): the calculator passcode endpoint (/api/admin-login) has no rate limit beyond a 300 ms delay.
+
 ## 2026-11-17 - Slice 4 (Students & roles)
 
 - Admin page lists accounts (name, email, joined, last sign-in, method, verified, admin) via `/api/admin/users`; Make/Remove admin via `/api/admin/role`; delete a student via `/api/admin/delete-user` (same code as self-delete, `netlify/lib/accounts.mts`). Each function checks a verified admin token.
