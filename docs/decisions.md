@@ -44,7 +44,8 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 
 - Admin page lists accounts (name, email, joined, last sign-in, method, verified, admin) via `/api/admin/users`; Make/Remove admin via `/api/admin/role`; delete a student via `/api/admin/delete-user` (same code as self-delete, `netlify/lib/accounts.mts`). Each function checks a verified admin token.
 - Granting admin applies on the person's next page load (no sign-out). Removing admin revokes their refresh tokens (they're signed out on next refresh); an ID token they already hold can keep the claim for up to an hour, since Firestore rules don't check revocation. Accepted.
-- Admins can't remove their own role or delete themselves from this page.
+- Admins can't change their own role or delete themselves from this page. Admin functions check token revocation, so a removed/deleted admin loses the admin page immediately; only Firestore-rule powers (chat moderation) can linger up to an hour.
+- Accepted: any admin can demote or delete another admin (including the founding one). Fine for a small trusted team; revisit if admins grow.
 
 ## 2026-11-17 - Slice 3.5 (left menu)
 

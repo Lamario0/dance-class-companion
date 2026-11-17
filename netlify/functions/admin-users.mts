@@ -19,11 +19,14 @@ export default async (req: Request, _context?: unknown) => {
     pageToken = page.pageToken;
   } while (pageToken && users.length < MAX_USERS);
 
-  // Profile names in one round trip.
+  // Profile names, read in chunks.
   const db = adminDb();
-  const refs = users.map(u => db.collection('users').doc(u.uid));
-  const profiles = refs.length ? await db.getAll(...refs) : [];
-  const names = new Map(profiles.filter(p => p.exists).map(p => [p.id, (p.data()?.displayName as string) || '']));
+  const names = new Map<string, string>();
+  for (let i = 0; i < users.length; i += 500) {
+    const refs = users.slice(i, i + 500).map(u => db.collection('users').doc(u.uid));
+    const profiles = await db.getAll(...refs);
+    profiles.filter(p => p.exists).forEach(p => names.set(p.id, (p.data()?.displayName as string) || ''));
+  }
 
   const rows = users.map(u => ({
     uid: u.uid,
@@ -38,7 +41,7 @@ export default async (req: Request, _context?: unknown) => {
   }));
   rows.sort((a, b) => (b.joined ?? '').localeCompare(a.joined ?? ''));
 
-  return json({ users: rows, truncated: users.length >= MAX_USERS });
+  return json({ users: rows, truncated: !!pageToken });
 };
 
 export const config = {

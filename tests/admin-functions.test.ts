@@ -101,8 +101,21 @@ test('make admin, then remove admin (with token revocation)', async () => {
   assert.notEqual(after.tokensValidAfterTime, before, 'refresh tokens revoked on removal');
 });
 
+test('a removed admin\'s old token is refused right away (no self re-grant)', async () => {
+  const exAdmin = await makeAccount('exadmin', { admin: true });
+  const oldToken = await tokenFor(exAdmin.email);
+  assert.equal((await call(listUsers, 'GET', oldToken)).status, 200, 'works while admin');
+  await new Promise(r => setTimeout(r, 1100)); // revocation is second-granular
+  assert.equal((await call(setRole, 'POST', bossToken, { uid: exAdmin.uid, admin: false })).status, 200);
+  assert.equal((await call(listUsers, 'GET', oldToken)).status, 401);
+  assert.equal((await call(setRole, 'POST', oldToken, { uid: exAdmin.uid, admin: true })).status, 401);
+  assert.equal((await call(deleteUser, 'POST', oldToken, { uid: boss.uid })).status, 401);
+  assert.equal((await adminAuth().getUser(exAdmin.uid)).customClaims?.admin, undefined);
+});
+
 test('you cannot remove your own admin role or delete yourself', async () => {
   assert.equal((await call(setRole, 'POST', bossToken, { uid: boss.uid, admin: false })).status, 400);
+  assert.equal((await call(setRole, 'POST', bossToken, { uid: boss.uid, admin: true })).status, 400);
   assert.equal((await adminAuth().getUser(boss.uid)).customClaims?.admin, true);
   assert.equal((await call(deleteUser, 'POST', bossToken, { uid: boss.uid })).status, 400);
   assert.ok(await adminAuth().getUser(boss.uid));

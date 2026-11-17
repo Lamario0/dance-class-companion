@@ -42,6 +42,7 @@ export const StudentsPage: React.FC = () => {
   const [pending, setPending] = useState<Pending>(null);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  const [truncated, setTruncated] = useState(false);
 
   useEffect(() => {
     if (!service || !isAdmin) return;
@@ -49,7 +50,11 @@ export const StudentsPage: React.FC = () => {
     setError('');
     service
       .authedFetch('/api/admin/users')
-      .then(body => live && setRows(body.users))
+      .then(body => {
+        if (!live) return;
+        setRows(body.users);
+        setTruncated(!!body.truncated);
+      })
       .catch(err => live && setError(err.status === 403 ? "Your account isn't an admin." : "Couldn't load students. Check your connection and try again."));
     return () => { live = false; };
   }, [service, isAdmin, reload]);
@@ -80,6 +85,11 @@ export const StudentsPage: React.FC = () => {
       }
       setPending(null);
     } catch (err) {
+      // Already gone (deleted elsewhere): drop the row instead of leaving it stale.
+      if ((err as any)?.status === 404) {
+        setRows(rs => rs?.filter(r => r.uid !== row.uid) ?? null);
+        setPending(null);
+      }
       toast.show((err as Error).message || 'Something went wrong. Please try again.', 'error');
     } finally {
       setBusy(false);
@@ -116,6 +126,11 @@ export const StudentsPage: React.FC = () => {
             </label>
           </div>
 
+          {truncated && (
+            <p role="status" className="mb-3 rounded-[var(--radius-sm)] bg-amber-500/10 px-3 py-2 text-[14px] text-amber-200">
+              Showing the first {rows.length} accounts. Some newer ones aren't listed.
+            </p>
+          )}
           {shown.length === 0 ? (
             <p className="py-6 text-center text-text-lo">No accounts match “{query}”.</p>
           ) : (
@@ -186,7 +201,7 @@ export const StudentsPage: React.FC = () => {
             ? "This permanently deletes their login, profile and notes. Their chat messages stay, shown as from a former student. This can't be undone."
             : pending?.kind === 'grant'
               ? 'They’ll be able to moderate the chat and manage students. It takes effect the next time they open the app.'
-              : 'They’ll be signed out and lose admin tools when they sign back in (open sessions can keep admin for up to an hour).'}
+              : 'They’ll lose the admin page right away and be signed out; chat moderation in an already-open app can last up to an hour.'}
         </p>
         <div className="mt-5 flex gap-3">
           <button type="button" onClick={() => setPending(null)} disabled={busy} className="btn-secondary press flex-1">Cancel</button>

@@ -21,8 +21,8 @@ export default async (req: Request, _context?: unknown) => {
   const uid = typeof body?.uid === 'string' ? body.uid : '';
   const makeAdmin = body?.admin;
   if (!uid || uid.length > 128 || typeof makeAdmin !== 'boolean') return json({ error: 'Invalid request.' }, 400);
-  if (uid === auth.caller.uid && !makeAdmin) {
-    return json({ error: "You can't remove your own admin role here." }, 400);
+  if (uid === auth.caller.uid) {
+    return json({ error: "You can't change your own admin role here." }, 400);
   }
 
   try {
