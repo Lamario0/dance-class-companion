@@ -31,7 +31,7 @@ Only the current slice is specced. Later ones are specced when reached.
 |---|---|---|
 | 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | done 2026-11-17 (PR #2) |
 | 2 | Notes: "my notes" on each class card + a free notebook, private to each student | done 2026-11-17 (PR #3) |
-| 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | specced below |
+| 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | done 2026-11-17 (PR #4) |
 | 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email | not specced |
 | 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | not specced |
 
@@ -93,6 +93,16 @@ Only the current slice is specced. Later ones are specced when reached.
 | 10 | Existing guest messages already in the live chat still display and can't be edited by non-admins | emulator with seeded old-format messages + rules tests |
 | 11 | `npm run build` passes; main bundle under 320 kB | build output |
 | 12 | Works at 375px and desktop; 44px tap targets; floating composer still rises from the nav on mobile | browser preview |
+
+### Result (2026-11-17)
+
+All criteria met.
+- 1-8, 10, 12: browser preview against the emulators (guest post, member post/edit/delete, rename, admin moderation, passcode no longer moderating, old-format message); Lamarr confirmed member/admin chat on the deploy preview against the live project.
+- 3, 4, 7, 10: 20 chat-rules tests (48 tests total) pass.
+- 9: delete-account test relabels messages "Former student".
+- 11: main bundle 301 kB.
+- Second check: the reviewer found a reserved-name rename loophole, members posting through the guest path, orphaned replies on hard delete, a silent partial rename and a delete-account ordering gap; all fixed and re-tested.
+- Deployed rules and code together (rules first, then merge within minutes), since the new rules refuse the old code's guest-style member posts.
 
 ### Reference to match
 
