@@ -27,6 +27,13 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Firebase project: the app's project is display name "dance class companion", ID `dance-class-companion`. The project displayed as "dance-class-companion" (ID `gen-lang-client-0566172369`) is the old AI Studio/Gemini project and is not used.
 - lamariow@gmail.com has the admin claim on the live project (2026-11-17).
 
+## 2026-11-17 - Slice 2 (Notes) spec approved
+
+- Class notes are one dated entry per class per week (weeks start Monday), tagged with that week's pattern; keyed by class name.
+- The notebook lives in the account sheet (nav stays at 3 tabs).
+- Explicit Save button with a discard-changes prompt.
+- Notes work offline (Firestore offline cache) and sync later.
+
 ## Earlier (redesign and chat, Nov 2026)
 
 - Chat stored in Firestore `chatMessages`, current quarter only, deleted by a TTL policy on `expireAt` (Blaze billing enabled 2026-11-05).
