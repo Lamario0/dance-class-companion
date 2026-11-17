@@ -32,6 +32,19 @@ export const adminDb = () => getFirestore(getApp());
 export const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+/**
+ * For admin-only functions: the caller if they're a verified admin, otherwise a
+ * ready-made 401/403 Response. Checks the token's claim, never anything from the UI.
+ */
+export const requireAdmin = async (req: Request) => {
+  const caller = await verifyUser(req);
+  if (!caller) return { error: json({ error: 'Please sign in again.' }, 401) } as const;
+  if (caller.email_verified !== true || caller['admin'] !== true) {
+    return { error: json({ error: 'Admins only.' }, 403) } as const;
+  }
+  return { caller } as const;
+};
+
 /** The signed-in Firebase user behind `Authorization: Bearer <ID token>`, or null. */
 export const verifyUser = async (req: Request) => {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');

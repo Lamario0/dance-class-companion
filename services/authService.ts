@@ -199,6 +199,19 @@ export const renameAccount = async (name: string) => {
 
 export const signOut = () => fbSignOut(auth);
 
+/** fetch() to our own /api/* functions with the signed-in user's ID token. */
+export const authedFetch = async (path: string, init: RequestInit = {}) => {
+  const u = auth.currentUser;
+  if (!u) throw new Error('Not signed in');
+  const res = await fetch(path, {
+    ...init,
+    headers: { ...(init.headers || {}), Authorization: `Bearer ${await u.getIdToken()}`, 'Content-Type': 'application/json' },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(body.error || `Request failed (${res.status})`), { status: res.status });
+  return body;
+};
+
 export const deleteAccount = async () => {
   const u = auth.currentUser;
   if (!u) return;

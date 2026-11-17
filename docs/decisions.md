@@ -40,6 +40,12 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Moderation by admin accounts only, enforced by Firestore rules; the calculator passcode no longer moderates chat and `chat-moderate` is removed.
 - Own messages editable/deletable any time this quarter, marked "(edited)". Deleting a message with replies soft-deletes it ("This message was deleted").
 
+## 2026-11-17 - Slice 4 (Students & roles)
+
+- Admin page lists accounts (name, email, joined, last sign-in, method, verified, admin) via `/api/admin/users`; Make/Remove admin via `/api/admin/role`; delete a student via `/api/admin/delete-user` (same code as self-delete, `netlify/lib/accounts.mts`). Each function checks a verified admin token.
+- Granting admin applies on the person's next page load (no sign-out). Removing admin revokes their refresh tokens (they're signed out on next refresh); an ID token they already hold can keep the claim for up to an hour, since Firestore rules don't check revocation. Accepted.
+- Admins can't remove their own role or delete themselves from this page.
+
 ## 2026-11-17 - Slice 3.5 (left menu)
 
 - Left menu for signed-in users only; My notes opens a full Notes page (not a nav tab); Admin section placeholder for slice 4; calculator stays on its passcode (only guarded against leaving unsaved notes).

@@ -42,8 +42,9 @@ export enum Tab {
   ANNOUNCEMENTS = 'ANNOUNCEMENTS',
   SETTINGS = 'SETTINGS',
   CALCULATOR = 'CALCULATOR',
-  /** reached from the left menu, not a nav tab */
-  NOTES = 'NOTES'
+  /** reached from the left menu, not nav tabs */
+  NOTES = 'NOTES',
+  STUDENTS = 'STUDENTS'
 }
 
 export interface AIResponse {

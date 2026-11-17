@@ -16,19 +16,29 @@ import { AccountButton, AccountSheet } from './components/auth/AccountSheet';
 import { useAccount } from './components/auth/AuthProvider';
 import { MenuButton, SideMenu } from './components/menu/SideMenu';
 import { LeaveGuardProvider } from './components/menu/LeaveGuard';
-import { NotebookPen } from 'lucide-react';
+import { NotebookPen, Users } from 'lucide-react';
 // The Notes page pulls in Firestore, so it loads on first visit.
 const NotesPage = React.lazy(() => import('./components/notes/NotesUI').then(m => ({ default: m.NotesPage })));
 
-/** Title for the header while on the Notes page (it isn't a nav tab). */
-const NOTES_ITEM = { tab: Tab.NOTES, label: 'Notes', title: 'My notes', icon: NotebookPen };
+// Admin page: loads on first visit (admins only).
+const StudentsPage = React.lazy(() => import('./components/admin/StudentsPage').then(m => ({ default: m.StudentsPage })));
 
-/** Lives inside AuthProvider (App itself sits above it). */
-const LeaveNotesWhenSignedOut: React.FC<{ active: boolean; onLeave: () => void }> = ({ active, onLeave }) => {
-  const { user, loading } = useAccount();
+/** Header titles for menu pages (they aren't nav tabs). */
+const MENU_PAGES = [
+  { tab: Tab.NOTES, label: 'Notes', title: 'My notes', icon: NotebookPen },
+  { tab: Tab.STUDENTS, label: 'Students', title: 'Students & roles', icon: Users },
+];
+
+/**
+ * Lives inside AuthProvider (App itself sits above it): leaves a menu page when
+ * the account can no longer see it (signed out; admin role gone for Students).
+ */
+const LeaveMenuPageWhenNotAllowed: React.FC<{ tab: Tab; onLeave: () => void }> = ({ tab, onLeave }) => {
+  const { user, loading, isAdmin } = useAccount();
   useEffect(() => {
-    if (active && !loading && !user) onLeave();
-  }, [active, loading, user, onLeave]);
+    if (loading) return;
+    if ((tab === Tab.NOTES && !user) || (tab === Tab.STUDENTS && (!user || !isAdmin))) onLeave();
+  }, [tab, loading, user, isAdmin, onLeave]);
   return null;
 };
 import { BottomSheet } from './components/ui/BottomSheet';
@@ -137,7 +147,7 @@ const App: React.FC = () => {
       return;
     }
     guardLeave(() => {
-      setDirection(tab === Tab.NOTES || tabIndex(tab) >= tabIndex(activeTab) ? 'right' : 'left');
+      setDirection(tab === Tab.NOTES || tab === Tab.STUDENTS || tabIndex(tab) >= tabIndex(activeTab) ? 'right' : 'left');
       setActiveTab(tab);
       window.scrollTo({ top: 0 });
     });
@@ -205,7 +215,7 @@ const App: React.FC = () => {
   // fetchSheetData resolves to empty lists when the sheet can't be reached.
   const loadFailed =
     !!data && !data.classes.length && !data.videos.length && !data.songs.length && !data.announcements.length;
-  const current = navItems.find(i => i.tab === activeTab) ?? (activeTab === Tab.NOTES ? NOTES_ITEM : BASE_NAV[0]);
+  const current = navItems.find(i => i.tab === activeTab) ?? MENU_PAGES.find(p => p.tab === activeTab) ?? BASE_NAV[0];
 
   return (
     <ToastProvider>
@@ -213,7 +223,7 @@ const App: React.FC = () => {
      <LeaveGuardProvider value={leaveGuard}>
      <MusicProvider songs={data?.songs ?? EMPTY_SONGS}>
       {/* Signing out on the Notes page returns to Classes. */}
-      <LeaveNotesWhenSignedOut active={activeTab === Tab.NOTES} onLeave={() => { notesDirty.current = false; setActiveTab(Tab.CLASSES); }} />
+      <LeaveMenuPageWhenNotAllowed tab={activeTab} onLeave={() => { notesDirty.current = false; setActiveTab(Tab.CLASSES); }} />
       <div id="app-shell" className="min-h-screen bg-surface-0 font-sans text-text-hi flex flex-col">
         {/* Header — slim on mobile: logo (secret triple-tap) + page title */}
         <header
@@ -281,6 +291,18 @@ const App: React.FC = () => {
                   }
                 >
                   <NotesPage onOpenAccount={() => setAccountOpen(true)} />
+                </React.Suspense>
+              )}
+              {activeTab === Tab.STUDENTS && (
+                <React.Suspense
+                  fallback={
+                    <div className="flex items-center gap-3 py-6 text-text-mid">
+                      <DancingDots label="Loading students" />
+                      <span>Loading students…</span>
+                    </div>
+                  }
+                >
+                  <StudentsPage />
                 </React.Suspense>
               )}
               {activeTab === Tab.ANNOUNCEMENTS && (
@@ -368,6 +390,7 @@ const App: React.FC = () => {
         onClose={closeMenu}
         returnFocusTo={menuButtonRef}
         onNotes={() => { setMenuOpen(false); navigateTo(Tab.NOTES); }}
+        onStudents={() => { setMenuOpen(false); navigateTo(Tab.STUDENTS); }}
         // Focus the hamburger first, so the account sheet returns focus there (not to the gone drawer item).
         onAccount={() => { menuButtonRef.current?.focus(); setMenuOpen(false); setAccountOpen(true); }}
       />
