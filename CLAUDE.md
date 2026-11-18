@@ -18,7 +18,8 @@ Android: `npm run build && npx cap sync android`, then `gradlew bundleRelease` w
 
 ## Where knowledge lives
 
-- `docs/spec.md` - the goal, the slices, and what "done" means for the current slice. Read it before starting work.
+- `docs/spec.md` - the current project (class attendance + QR check-in): goal, slices, and what "done" means for the current slice. Read it before starting work.
+- `docs/accounts-spec.md` - the finished accounts project (sign-in, notes, chat identity, menu, admin page, Android 1.2.0).
 - `docs/decisions.md` - dated log of confirmed decisions and why. Add to it when a decision is made; don't re-decide what is logged.
 - `docs/reference/` - examples the output should match.
 - `docs/REDESIGN.md` - the v2 redesign brief (done; still the design reference).
@@ -26,7 +27,8 @@ Android: `npm run build && npx cap sync android`, then `gradlew bundleRelease` w
 ## Task routing
 
 - UI change -> check it in the browser preview at 375px and desktop before calling it done
-- Firestore rules change -> run the rules checks against the emulator before deploying
+- Firestore rules change -> run the rules checks against the emulator before deploying; if the live code can't satisfy the new rules, deploy them right before merging
+- Server logic (check-ins, admin actions) -> a Netlify function in `netlify/functions/` wrapped with `withAppCors`, with a test in `tests/` against the emulators (`npm run emulators`, `npm test`)
 - Android release -> bump `versionCode` above the highest used (last: 11, 1.2.0), then build the signed bundle; install on a phone with `adb install -r` (Play's app-signing key is the same `dcc-release-key`)
 
 Skill candidates (repeated work with no skill yet):

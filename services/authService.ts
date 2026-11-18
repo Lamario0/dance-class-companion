@@ -241,7 +241,7 @@ export const authedFetch = async (path: string, init: RequestInit = {}) => {
     headers: { ...(init.headers || {}), Authorization: `Bearer ${await u.getIdToken()}`, 'Content-Type': 'application/json' },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(body.error || `Request failed (${res.status})`), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error(body.error || `Request failed (${res.status})`), { status: res.status, code: body.code as string | undefined });
   return body;
 };
 

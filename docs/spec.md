@@ -1,27 +1,27 @@
-# Dance Class Companion accounts - spec
+# Dance Class Companion attendance - spec
+
+(The finished accounts project's spec is in `docs/accounts-spec.md`.)
 
 ## Goal
 
-This exists so that students can keep their own class notes across devices and
-own their chat identity, and so the admin can manage who's an admin; the first
-version is done when a student can sign up with email or Google on
-danceclasscompanion.com, write notes on a class and in a free notebook, edit or
-delete their own chat messages, and the admin can see students and grant admin
-from an admin screen.
+This exists so the studio knows who came to each class and students can see
+their own attendance (and later progress toward levels); the first version is
+done when an admin can create class slots with printable QR codes, a signed-in
+student scanning one is checked into that slot's current class (once per day),
+the admin can check someone in by hand, and each check-in lands in the Google
+Sheet.
 
-- **Used by:** the public (class students), plus the admin (Lamarr) and anyone
-  he makes an admin.
-- **First version is done when:** all five slices below are live on
-  danceclasscompanion.com (the website; the Android release follows).
+- **Used by:** students (check in, see their attendance) and admins (slots,
+  QR codes, manual check-ins, headcounts).
+- **First version is done when:** all of slices 1-3 are live on
+  danceclasscompanion.com.
 
 ## Out of scope
 
-- Class attendance and QR check-in (next project, after this one).
-- The calculator / dance-party attendance. It keeps its triple-tap passcode and
-  is not touched.
-- Apple sign-in (revisit when the Apple Developer account and iOS app are real).
-- An "instructor" role. Roles are only **student** and **admin**.
-- Email-link (passwordless) sign-in, profile photos, social features.
+- The calculator / dance-party attendance (separate, untouched).
+- Passes, payments and "classes left" tracking.
+- Time windows or rotating codes: QR codes are static and always open.
+- Location checks.
 
 ## Slices
 
@@ -29,70 +29,68 @@ Only the current slice is specced. Later ones are specced when reached.
 
 | # | Slice | State |
 |---|---|---|
-| 1 | Accounts on the website: sign up / sign in (email + password, Google), name, sign out, delete account; admin role on Lamarr's account | done 2026-11-17 (PR #2) |
-| 2 | Notes: "my notes" on each class card + a free notebook, private to each student | done 2026-11-17 (PR #3) |
-| 3 | Chat identity: signed-in posts carry the account; edit/delete own messages; admins moderate by role (guests can still post) | done 2026-11-17 (PR #4) |
-| 3.5 | Left menu: hamburger drawer for signed-in users; notes move to a full Notes page; Admin section placeholder | done 2026-11-17 (PR #6) |
-| 4 | Admin screen: student list (name, email, joined) and grant/remove admin by email (lives in the left menu's Admin section) | done 2026-11-17 (PR #7) |
-| 5 | Android release: native Google sign-in in the Capacitor app, new signed bundle for Play | done 2026-11-17 (PR #8); Play upload pending |
+| 1 | Slots + QR check-in: admins create slots with printable QR codes; a signed-in student scans and is checked into the slot's current class (once per day); "My attendance" page | specced below |
+| 2 | Admin attendance tools: manual check-in (including people without an account, admin-added only), per-class headcount and who came | not specced |
+| 3 | Google Sheet sync both ways: each check-in becomes a row in an Attendance tab; slot titles editable in a Slots tab and read back by the app | not specced |
+| 4 | Android: scanning a QR opens the app (app links) and/or an in-app scanner | not specced |
+| 5 | Levels and progress: classes toward the next level, shown to students | not specced |
 
 ---
 
-## Slice 5 - Android app
+## Slice 1 - Slots and QR check-in
 
 ### What it does
 
-- The Android app (1.2.0) gets everything from slices 1-4: accounts, notes,
-  chat identity, the left menu and the admin page.
-- **Continue with Google** in the app opens the native Android account picker
-  (no browser popup). Email sign-up, verification and password reset work as on
-  the website (the emailed links open in the browser; the app picks up
-  verification via "I've verified").
-- **Server calls work in the app:** delete account, the admin page and the
-  calculator's passcode login reach `https://danceclasscompanion.com/api/*`
-  from the app (today they fail because the app has no `/api`).
-- **Back button:** closes an open sheet or the left menu; otherwise exits the
-  app (Android's default).
-- Released as **versionCode 11 / 1.2.0** to Play's **internal testing** track
-  first; promoted to production after Lamarr tries it.
+- **Admin > Class slots** (new item in the left menu's Admin section): create
+  a slot with a label (e.g. "Tue 7:00pm") and the class currently taught in it
+  (e.g. "WCS 201"); edit the title any week; archive a slot. Each slot shows
+  its **QR code** with Download/Print, and the link it encodes.
+- The QR encodes a permanent link, `https://danceclasscompanion.com/checkin/<slotId>`.
+  Changing the slot's title never changes its QR.
+- **Scanning** with a phone camera opens that link:
+  - signed in with a verified account → "You're checked in to WCS 201 ·
+    Tue 7:00pm" with a little celebration;
+  - already checked in to that slot today → "You're already checked in today";
+  - signed out → the sign-in sheet first, then the check-in completes;
+  - unverified email → the "Check your email" step first;
+  - unknown/archived slot → a friendly "This code isn't active" screen.
+- **My attendance** (left menu, signed-in users): total classes, count per
+  class title, and a dated list of check-ins, newest first.
 
 ### Confirmed decisions
 
 | Decision | Choice | Why |
 |---|---|---|
-| Google sign-in in the app | Native account picker via a Capacitor Firebase Authentication plugin, then signed into the web Firebase SDK with the returned credential | User choice; popups/redirects don't work reliably in an app WebView |
-| Fingerprints | Add the upload key's SHA-1/SHA-256 (`dcc-release-key`) and Play's app-signing key SHA-1/SHA-256 (from Play Console) to the Firebase Android app; refresh `google-services.json` | Required for native Google sign-in; the Play one is what installed apps are signed with |
-| API calls from the app | Absolute base URL `https://danceclasscompanion.com` when running natively; the functions answer CORS for the app's origin only (`https://localhost`, `capacitor://localhost`) | Keeps the website unchanged and the API closed to other sites |
-| Back button | Close the top sheet/menu, otherwise exit | User choice |
-| Release | versionCode 11, versionName 1.2.0, signed with `dcc-release-key`, internal testing first | User choice; above the last used code (10) |
-| Out of scope | iOS, Apple sign-in, push notifications, deep links for email links | Later |
+| What a QR belongs to | A slot created in the admin page (label + current class title); the QR never changes | User choice: titles change week to week |
+| Restriction | Static, always open; once per slot per studio day | User choice |
+| Who checks in by QR | Signed-in, verified students | User choice; people without accounts are added by admins (slice 2) |
+| Studio day | America/Detroit (Grand Rapids) calendar day | "Once per day" must not depend on the phone's time zone |
+| Check-in path | `POST /api/checkin` Netlify function: verifies the token, resolves the slot's current title, computes the studio day, writes Firestore | One trusted place for the once-per-day rule and (slice 3) the sheet write |
+| Data | `slots/{slotId}` (label, title, archived, createdAt); `checkins/{slotId__YYYY-MM-DD__uid}` (uid, name, slotId, slotLabel, title, date, at). Students read only their own check-ins; admins read all; nobody writes check-ins from the browser | Deterministic id = once per day; server-only writes |
+| Link routing | Netlify rewrite `/checkin/*` -> the app; the app reads the slot id from the path | No SPA fallback exists today |
+| QR generation | In the browser (small library, lazy-loaded on the admin page); PNG download + print | No server or third-party QR service |
+| Sheet | Not in slice 1 (slice 3: both ways via the Google Sheets API using the existing service account; the sheet must be shared with it) | Keeps slice 1 small |
+| Android | Slice 1 works in the browser; in the app, scanning opens the website for now (slice 4 adds app links) | Keeps slice 1 small |
 
 ### Done means
 
 | # | Criterion | Checked by |
 |---|---|---|
-| 1 | On the website nothing changes (Google popup sign-in, API calls same-origin) | browser preview + build |
-| 2 | Native Google sign-in signs into the app and creates/loads the profile | Lamarr on a phone (internal testing) |
-| 3 | Email sign-up, verification ("I've verified") and sign-in work in the app | Lamarr on a phone |
-| 4 | Delete account, the admin page and calculator login work from the app (API reachable, CORS allowed for the app origin) | Lamarr on a phone; CORS checked with curl against the deploy preview |
-| 5 | The API refuses CORS for any other website origin | curl against the deploy preview |
-| 6 | Back button closes an open sheet / the menu; otherwise exits | Lamarr on a phone |
-| 7 | Notes, chat (member post/edit/delete) and offline notes work in the app | Lamarr on a phone |
-| 8 | The signed AAB is versionCode 11 / 1.2.0, signed with `dcc-release-key`, and accepted by Play internal testing | apksigner/jarsigner + Play Console |
-| 9 | `npm run build` passes; the website's main bundle stays under 320 kB (native plugin code not loaded on the web) | build output |
-
-### Result (2026-11-17)
-
-- 1, 9: website unchanged (relative API calls, plugin not loaded), main bundle 309 kB.
-- 2, 3, 4, 6, 7: Lamarr confirmed on a Galaxy Z Fold5 (1.2.0 installed over 1.1.0 via adb): native Google sign-in, email sign-in, notes, chat, Students & roles, delete account / calculator login from the app, back button.
-- 4, 5: 10 CORS tests; live check after merge: app-origin preflight 204, other origins 403.
-- 8: signed AAB/APK verified (versionCode 11 / 1.2.0, `dcc-release-key`). Play internal-testing upload still to do (Lamarr, Play Console).
-- Second check: no security issues; back-button, Escape-stacking and cancel-message findings fixed.
+| 1 | An admin creates a slot (label + title); it appears in Class slots with a QR that encodes `/checkin/<slotId>`; Download gives a PNG; Print shows a printable page | browser preview against the emulators; decode the QR image |
+| 2 | Editing a slot's title keeps the same slot id and QR; archiving hides it from new check-ins | browser preview + emulator data |
+| 3 | A verified student opening the link is checked in and sees the class title and slot label; a second scan the same studio day says already checked in (no second record) | browser preview + emulator data + function test |
+| 4 | Signed out → sign-in first, then the check-in completes; unverified → "Check your email" first | browser preview |
+| 5 | Unknown or archived slot → "This code isn't active"; nothing written | function test + browser |
+| 6 | "Once per day" uses the America/Detroit date (a check-in at 11:30pm local and 12:30am local are different days; 11pm and 11:30pm are the same) | function test |
+| 7 | Rules/API: students can't write check-ins or slots from the browser; non-admins can't create/edit slots; a student can read only their own check-ins; admins can read all | rules tests + function tests |
+| 8 | My attendance shows total, counts per class and a dated list for the signed-in student only | browser preview |
+| 9 | `npm run build` passes; main bundle under 330 kB (admin slots page and QR code lazy-loaded) | build output |
+| 10 | Works at 375px and desktop; 44px tap targets; the check-in screen is clear on a phone held at arm's length | browser preview + user looks |
 
 ### Reference to match
 
-The 1.1.0 release process (CLAUDE.md "Android" and docs/decisions.md);
-the website's current behaviour for every account feature.
+The left-menu pages from the accounts project (`NotesPage`, `StudentsPage`)
+and the app's empty/celebration states (`components/ui/Doodles.tsx`).
 
 ### Second check
 
@@ -100,373 +98,5 @@ Fresh-context reviewer subagent with this spec, the criteria and the diff.
 
 ### Open questions
 
-- Lamarr: copy the **App signing key certificate** SHA-1 and SHA-256 from Play
-  Console → Test and release → App integrity, before criterion 2 can pass.
-
----
-
-## Slice 4 - Students & roles (admin screen)
-
-### What it does
-
-- In the left menu's **Admin** section, **Students & roles** opens a full page
-  (like Notes; admins only).
-- It lists every account: **name**, **email**, **joined**, **last sign-in**,
-  **sign-in method** (Google / email) and whether the email is **verified**,
-  with an **Admin** badge on admins. A search box filters by name or email;
-  newest first.
-- Each row has **Make admin** / **Remove admin**. Your own row can't lose
-  admin here. The change takes effect for that person on their next page load
-  (their sessions are refreshed so it can't linger).
-- Each row (except your own) has **Delete account**, behind a confirm step that
-  names the student. It does exactly what self-deletion does: login, profile
-  and notes removed; chat messages become "Former student".
-- Non-admins can't open the page or call its server functions (the server
-  checks the admin role on every request, never the UI).
-
-### Confirmed decisions
-
-| Decision | Choice | Why |
-|---|---|---|
-| Columns | Name, email, joined, last sign-in, sign-in method + verified, admin badge | User choice; notes stay private (no counts) |
-| Actions | Make/remove admin; delete a student's account | User choice |
-| Self-protection | Your own row can't remove admin or be deleted from this screen | User choice: no accidental lock-out |
-| Where it runs | Netlify functions with the Admin SDK: `/api/admin/users` (list), `/api/admin/role`, `/api/admin/delete-user`; each verifies the caller's ID token has `admin: true` | Emails and claims live in Firebase Auth, which only the Admin SDK can read |
-| Role changes | Set/clear the custom claim and revoke the person's refresh tokens so it applies on their next load | Slice 1 rule: admin power comes from the claim |
-| Deleting a student | Shares the self-delete code path (profile + notes, relabel chat, delete login) | One behaviour, already tested |
-| Page | Full page from the menu (not a nav tab), lazy-loaded | Same pattern as Notes |
-| Out of scope | Resending verification, viewing notes, editing names, bulk actions, attendance | User choice / later project |
-
-### Done means
-
-| # | Criterion | Checked by |
-|---|---|---|
-| 1 | Admins see Students & roles in the menu and it opens the page; non-admins don't see it | browser preview |
-| 2 | The page lists all accounts with name, email, joined, last sign-in, method, verified and admin badge; search filters by name/email | browser preview against the emulators (several seeded accounts) |
-| 3 | Make admin gives that account the Admin badge and, on its next load, admin powers (e.g. chat moderation) | browser preview + emulator claim check |
-| 4 | Remove admin takes it away the same way; your own row can't remove admin | browser preview |
-| 5 | Delete account (after a confirm naming the student) removes the login, profile and notes and relabels their chat; your own row can't be deleted | function test against the emulators + browser |
-| 6 | Every admin function refuses a missing token, a non-admin token and an unverified token (401/403), and refuses acting on yourself where blocked | function tests against the emulators |
-| 7 | `npm run build` passes; main bundle under 320 kB (admin page lazy-loaded) | build output |
-| 8 | Works at 375px and desktop; 44px tap targets; long emails don't overflow | browser preview |
-
-### Reference to match
-
-`components/notes/NotesUI.tsx` (`NotesPage` layout) and the slice 3.5 menu;
-`netlify/functions/delete-account.mts` for the delete path.
-
-### Second check
-
-Fresh-context reviewer subagent with this spec, the criteria and the diff.
-
----
-
-## Slice 3.5 - Left menu
-
-### What it does
-
-- **Signed-in students** get a hamburger button at the far left of the header
-  (before the logo; the logo keeps its triple-tap). Signed out, there is no
-  menu button and the header looks as it does today.
-- The button opens a **drawer from the left** (phone and desktop): their name
-  at the top, then **My notes** and **Account**. Admins also see an **Admin**
-  section with "Students & roles - coming next" (filled in by slice 4).
-- **My notes** closes the drawer and opens a full **Notes page** in the main
-  area: class notes grouped by class, free notes, New note, and the same editor
-  (Save, discard prompt, offline) as today. It's reached only from the menu, so
-  the bottom/top nav keeps its three tabs.
-- **Account** opens the existing account sheet, which no longer contains the
-  notebook (name, sign out, delete account only).
-- The **My notes button on class cards** stays and still opens that class's
-  weekly note sheet.
-- Signing out while on the Notes page returns to Classes.
-
-### Confirmed decisions
-
-| Decision | Choice | Why |
-|---|---|---|
-| Who sees the menu | Signed-in users only | User choice |
-| Placement | Hamburger at the far left of the header, phone and desktop; account button stays at the right | User choice |
-| My notes | Opens a full Notes page in the main area (not a nav tab) | User choice: room to grow (search, filters later) |
-| Admin section | Admins only; placeholder for slice 4; calculator stays on its triple-tap passcode | User choice |
-| Account sheet | Loses the notebook; keeps name, sign out, delete account | Notes now live on their own page |
-| Drawer behaviour | Slides in from the left over a dimmed backdrop; closes on backdrop tap, Esc, swipe left or choosing an item; focus moves into it and back to the button | Matches the bottom-sheet patterns |
-| Unsaved notes | Leaving the Notes page with unsaved edits asks "Discard your changes?" | Same rule as slice 2 |
-| Out of scope | The student list and roles (slice 4), notes search, other menu items | Keep the slice small |
-
-### Done means
-
-| # | Criterion | Checked by |
-|---|---|---|
-| 1 | Signed out, there is no menu button and the header is unchanged | browser preview |
-| 2 | Signed in, the hamburger shows at the far left; tapping it opens the drawer with the name, My notes and Account | browser preview (375px + desktop) |
-| 3 | The drawer closes on backdrop tap, Esc, swipe left and after choosing an item; keyboard focus moves in and back to the button | browser preview |
-| 4 | My notes opens the Notes page with class notes grouped by class and free notes; New note, edit, delete and Save work as in slice 2 | browser preview against the emulators |
-| 5 | Leaving the Notes page (menu, nav tab, sign out) with unsaved edits asks "Discard your changes?"; Keep editing keeps the text | browser preview |
-| 6 | Account opens the account sheet, which no longer shows the notebook | browser preview |
-| 7 | Only admins see the Admin section, with the slice 4 placeholder | browser preview (admin vs member account) |
-| 8 | Class cards' My notes still opens the weekly class note sheet | browser preview |
-| 9 | Signing out on the Notes page returns to Classes and the menu button disappears | browser preview |
-| 10 | `npm run build` passes; main bundle under 320 kB (Notes page loads lazily) | build output |
-| 11 | 44px tap targets; respects reduced motion; no sideways scroll at 375px | browser preview |
-
-### Reference to match
-
-`components/ui/BottomSheet.tsx` (motion, focus, swipe), `components/notes/NotesUI.tsx`
-(the notebook and editor being moved).
-
-### Second check
-
-Fresh-context reviewer subagent with this spec, the criteria and the diff.
-
----
-
-## Slice 3 - Chat identity
-
-### What it does
-
-- **Signed-in, verified students** post under their account name: the composer
-  shows "Posting as {name}", and "change" opens the account sheet where the name
-  is edited. Their messages carry a small member mark.
-- **Renaming** in the account sheet also updates the name on their messages
-  from this quarter.
-- They can **edit** and **delete** their own messages (and replies) any time
-  this quarter. Edited messages show "(edited)".
-- **Deleting a message that has replies** keeps the replies: the message shows
-  "This message was deleted". Without replies it's removed completely.
-- **Admin accounts** (the admin role from slice 1) can edit or delete any
-  message and get an "Admin" tag on their own posts. Admin deletes of a message
-  with replies also show "This message was deleted".
-- **Guests** (and unverified accounts) post exactly as today: type a name, no
-  edit/delete. "Studio Admin" stays reserved.
-- **The calculator passcode no longer controls chat**; it still unlocks the
-  calculator. The `chat-moderate` function and the passcode token in the chat
-  go away.
-- **Deleting an account** keeps its messages but shows them as
-  "Former student" (no member mark, no longer editable by anyone but admins).
-
-### Confirmed decisions
-
-| Decision | Choice | Why |
-|---|---|---|
-| Post name for members | The account display name (edited in the account sheet); enforced by the rules against the profile | User choice; nobody can post under another member's name |
-| Renaming | Updates the name on their messages this quarter | Keeps the chat consistent with the account name |
-| Moderation | Admin role only, checked by Firestore rules (`request.auth.token.admin`) | User choice; slice 1 rule: never trust the UI badge |
-| Calculator passcode | Unchanged for the calculator; no longer moderates chat; `chat-moderate` removed | User choice |
-| Editing | Own messages, any time this quarter, marked "(edited)" | User choice |
-| Delete with replies | Soft delete ("This message was deleted"), replies stay; hard delete when there are no replies | User choice |
-| Who counts as a member | Signed in with a verified email (Google counts) | Slice 1 decision |
-| Guests | Unchanged: any name, no edit/delete, "Studio Admin" reserved | Decision 2026-11-17 |
-| Deleted accounts | Messages relabelled "Former student", member link removed, by `/api/delete-account` | Decision 2026-11-17 |
-| Data | `chatMessages` gains `uid` (members only), `role` ('member' / 'admin'), `editedAt`, `deleted`; existing guest messages untouched | Minimal change to the live collection |
-| Out of scope | Reactions, mentions, notifications, reporting, chat on Android (slice 5) | Keep the slice small |
-
-### Done means
-
-| # | Criterion | Checked by |
-|---|---|---|
-| 1 | A guest posts and replies exactly as before; no edit/delete controls on any message | browser preview |
-| 2 | A verified member's composer shows "Posting as {account name}"; "change" opens the account sheet; the post appears with a member mark | browser preview against the emulators |
-| 3 | Rules: a member can't post under a name other than their profile name, can't set another uid, can't claim the admin role; guests can't set uid/role | rules tests |
-| 4 | A member can edit their own message; it shows "(edited)"; they can't edit or delete anyone else's | browser preview + rules tests |
-| 5 | A member deletes their own message: without replies it disappears; with replies it shows "This message was deleted" and the replies stay | browser preview + emulator data check |
-| 6 | Renaming in the account sheet updates the name on that member's messages this quarter | browser preview + emulator data check |
-| 7 | An admin account sees edit/delete on every message and an Admin tag on its own posts; a non-admin can't moderate (rules refuse) | browser preview + rules tests |
-| 8 | Unlocking the calculator passcode no longer shows chat moderation; the calculator still works | browser preview |
-| 9 | Deleting an account relabels its messages "Former student" and removes the member link | delete-account test against the emulator |
-| 10 | Existing guest messages already in the live chat still display and can't be edited by non-admins | emulator with seeded old-format messages + rules tests |
-| 11 | `npm run build` passes; main bundle under 320 kB | build output |
-| 12 | Works at 375px and desktop; 44px tap targets; floating composer still rises from the nav on mobile | browser preview |
-
-### Result (2026-11-17)
-
-All criteria met.
-- 1-8, 10, 12: browser preview against the emulators (guest post, member post/edit/delete, rename, admin moderation, passcode no longer moderating, old-format message); Lamarr confirmed member/admin chat on the deploy preview against the live project.
-- 3, 4, 7, 10: 20 chat-rules tests (48 tests total) pass.
-- 9: delete-account test relabels messages "Former student".
-- 11: main bundle 301 kB.
-- Second check: the reviewer found a reserved-name rename loophole, members posting through the guest path, orphaned replies on hard delete, a silent partial rename and a delete-account ordering gap; all fixed and re-tested.
-- Deployed rules and code together (rules first, then merge within minutes), since the new rules refuse the old code's guest-style member posts.
-
-### Reference to match
-
-The current chat (`components/AnnouncementsView.tsx`, `services/chatService.ts`)
-and slice 1-2's account sheet patterns.
-
-### Second check
-
-Fresh-context reviewer subagent with this spec, the criteria and the diff.
-
-### Open questions
-
-- None.
-
----
-
-## Slice 2 - Notes
-
-### What it does
-
-- Each class card gets a small **My notes** button. Signed out, it opens the
-  sign-in sheet; signed in but unverified, it opens the "Check your email"
-  step; otherwise it opens a sheet titled with the class name.
-- The class sheet shows **this week's note** for that class: a dated entry
-  tagged with the week and the pattern on the card ("Week of Nov 17 · Sugar
-  Push w/ Spring"). Below it, the student's earlier weekly entries for that
-  class, newest first. Tapping one opens it to read, edit or delete.
-- Notes save with a **Save** button. Closing with unsaved changes asks
-  "Discard your changes?". Saving works offline: the note is kept on the
-  device and syncs when the connection is back, and the sheet says so.
-- The account sheet's "coming next" panel becomes **My notes**: class notes
-  grouped by class (newest first), then free notes, plus **New note** for a
-  free note with an optional title. Opening a note there uses the same
-  editor.
-- Notes are private: only their owner can read or change them, and deleting
-  the account deletes them (already built in slice 1).
-
-### Confirmed decisions
-
-| Decision | Choice | Why |
-|---|---|---|
-| Class note shape | One dated entry per class per week, tagged with that week's pattern | User choice: builds a history per class |
-| Week | Weeks start Monday; reopening a class in the same week reopens that week's entry | One entry per class per week, no duplicates |
-| Class identity | Keyed by the class name (the sheet has no stable class id); the note stores the class name and pattern as written that week | Notes survive the weekly sheet edits; a renamed class starts a new group, old notes stay readable |
-| Notebook home | Inside the account sheet; nav stays at 3 tabs | User choice |
-| Saving | Explicit Save button, with a discard-changes prompt | User choice |
-| Offline | Firestore offline cache; saves made offline sync later | User choice: studios often have bad signal |
-| Who can use it | Signed in with a verified email (Google counts as verified), enforced by Firestore rules | Slice 1 decision |
-| Data | `users/{uid}/notes/{noteId}`: kind (class/free), classKey, className, pattern, weekOf, title, body, createdAt, updatedAt | Lives under the profile, so account deletion removes it |
-| Limits | Body up to 10,000 characters, title up to 80 | Generous for class notes; keeps documents small |
-| Out of scope | Search, sharing, formatting/rich text, photos, admins reading student notes, Android (slice 5) | Keep the slice small |
-
-### Done means
-
-| # | Criterion | Checked by |
-|---|---|---|
-| 1 | Signed out, class cards look as before apart from a My notes button; tapping it opens the sign-in sheet | browser preview |
-| 2 | An unverified email account tapping My notes gets the "Check your email" step, and the rules reject its note writes | browser preview + rules test |
-| 3 | A verified student can write and Save this week's note on a class; it shows the week and the card's pattern, and survives reload | browser preview against the emulators |
-| 4 | Reopening the same class in the same week reopens that entry (no duplicate); an entry from an earlier week shows under "Earlier notes" | emulator (seeded earlier-week note) + browser |
-| 5 | Editing an earlier entry and saving updates it; deleting it (after confirming) removes it | browser preview |
-| 6 | Closing with unsaved changes asks "Discard your changes?"; Keep editing keeps the text | browser preview |
-| 7 | Account sheet > My notes lists class notes grouped by class and free notes; New note creates a free note with an optional title | browser preview |
-| 8 | Offline: with the network cut, Save shows "Saved on this device, will sync"; after reconnecting it reaches the database | browser preview (offline emulation) + emulator data check |
-| 9 | Rules: only the owner can read/write their notes; fields and sizes are validated; another student and guests are refused | rules tests against the emulator |
-| 10 | Deleting the account removes all notes (regression of slice 1) | delete-account test |
-| 11 | `npm run build` passes; the main bundle stays under 320 kB (notes code loads lazily) | build output |
-| 12 | Works at 375px and desktop; tap targets 44px; the class cards stay equal height | browser preview |
-
-### Result (2026-11-17)
-
-All criteria met.
-- 1-8, 12: browser preview against the emulators (offline via Firestore's network toggle); Lamarr confirmed notes on the deploy preview against the live project.
-- 9: 12 notes-rules tests (29 tests total) pass; live rules spot-checked (notes 403 signed out, chat 200).
-- 10: covered by the slice 1 delete-account test (notes subcollection).
-- 11: main bundle 301 kB; notes code is a 13 kB lazy chunk.
-- Second check: the fresh-context reviewer found two data-loss paths (offline re-create dropped on sync; editor remount wiping typed text) plus smaller issues; all fixed and re-tested in the browser. While testing, "Keep editing" losing text and discarded text returning on reopen were also found and fixed.
-
-### Reference to match
-
-Slice 1's account sheet (`components/auth/AccountSheet.tsx`) and the bottom
-sheet pattern; class cards in `components/ClassesView.tsx`.
-
-### Second check
-
-Fresh-context reviewer subagent with this spec, the criteria and the diff.
-
-### Open questions
-
-- None. (Week starts Monday and class-name keys are proposed above; change
-  them at approval if you prefer otherwise.)
-
----
-
-## Slice 1 - Accounts on the website
-
-### What it does
-
-- Anyone can keep using Classes, Media and News without an account, exactly as
-  today.
-- A small account button in the header opens a sheet. Signed out, it offers
-  **Continue with Google** and **email + password** (sign up, sign in, "forgot
-  password" email). A new account asks for a display name.
-- Email sign-ups get a verification email. Until they click it, the sheet shows
-  "Check your email" with a **resend** button, and the account is treated as
-  unverified (slices 2-3 will keep Notes and chat edit/delete locked until
-  then). Google accounts count as verified.
-- Signed in, the sheet shows the name and email, lets the student change their
-  name, sign out, and **delete my account** (with a confirm step).
-- Deleting an account removes the login and profile (and, once slice 2 exists,
-  their notes). Chat messages stay; slice 3 relabels them "Former student".
-- Lamarr's account has the **admin** role, set once by a script. It is visible
-  in the sheet ("Admin") but grants nothing new until slices 3-4. The
-  calculator's triple-tap passcode is unchanged.
-
-### Confirmed decisions
-
-Every row was confirmed by the user, not assumed.
-
-| Decision | Choice | Why |
-|---|---|---|
-| Stack | Existing React 19 + Vite + Tailwind 4 app; Firebase Auth + Firestore (already set up, billing on) | Matches the project and the user's defaults |
-| Sign-in methods | Email + password (with password reset) and Google. No Apple, no email link | User choice; Apple needs a paid developer account |
-| Guest access | Sign-in optional; the app works signed out | User choice |
-| Roles | Student (default) and admin; admin is a Firebase custom claim `admin: true` | User choice; claims are trusted by Firestore rules and work in the app |
-| First admin | Lamarr's account, set by a one-time script using the service account | User choice: "my account and any I choose" (granting others is slice 4) |
-| Calculator | Untouched; keeps its passcode | User choice |
-| Profile data | `users/{uid}`: displayName, createdAt. Email comes from Auth, never shown to other students | Least data needed |
-| Email verification | Required: email accounts can't use Notes or chat edit/delete until verified; Google accounts are already verified | User choice |
-| Admin account | lamariow@gmail.com | User choice |
-| Delete account | Removes login + profile + notes; chat stays, relabelled "Former student" in slice 3 | User choice; Play requires in-app deletion |
-| Server code | Netlify functions with the Admin SDK (existing pattern, key already in Netlify) | Consistent with `chat-moderate.mts` |
-| Hosting / release | Website first (branch -> PR -> deploy preview -> main), Android in slice 5 | User choice |
-| Development | Firebase Auth + Firestore emulators locally (Java 21 for the emulator) | User's defaults; keeps tests off the live project |
-
-### Done means
-
-Each line is pass/fail and names its check.
-
-| # | Criterion | Checked by |
-|---|---|---|
-| 1 | Signed out, Classes, Media and News look and behave as before, and nothing asks for sign-in | browser preview (phone + desktop) |
-| 2 | A new user can sign up with email + password and a display name; reloading keeps them signed in | browser preview against the Auth emulator |
-| 3 | "Continue with Google" signs a user in and creates their profile on first sign-in | browser preview against the Auth emulator (emulated Google); then the deploy preview with a real Google account (user looks) |
-| 4 | Wrong password and "email already in use" show friendly messages, not raw Firebase codes | browser preview |
-| 5 | "Forgot password" sends a reset email | Auth emulator log; real email on the deploy preview (user looks) |
-| 5b | Email sign-up sends a verification email; the sheet shows "Check your email" + resend until verified, then shows the account normally (checked on reopen/refresh) | Auth emulator (verify link from its log); real email on the deploy preview (user looks) |
-| 6 | Changing the display name updates the sheet and survives reload | browser preview |
-| 7 | Sign out returns to the signed-out sheet | browser preview |
-| 8 | Delete account (after confirming) removes the Auth user and `users/{uid}`; signing in again with those details fails | emulator: Auth + Firestore state checked by script |
-| 9 | Firestore rules: a user can read/write only their own `users/{uid}`; nobody can set roles from the browser; other students cannot read it | rules test script against the emulator |
-| 10 | Lamarr's account shows "Admin" after the one-time script; other accounts don't | emulator, then deploy preview (user looks) |
-| 11 | `npm run build` passes and the main bundle stays under 320 kB (Auth loads lazily) | build output |
-| 12 | Works on a 375px-wide screen with 44px tap targets and the existing design tokens | browser preview at 375px |
-
-### Result (2026-11-17)
-
-All criteria met.
-- 1, 2, 4, 6, 7, 12: browser preview against the emulators (375px and desktop).
-- 3, 5, 5b: emulator, then confirmed by Lamarr on the deploy preview against the live project (real Google sign-in, real verification and reset emails).
-- 8: emulator test + UI run, then a real delete on the deploy preview.
-- 9: 15 rules tests (17 tests total) pass; live rules spot-checked (profiles 403 signed out, chat 200).
-- 10: emulator via `set-admin.mjs`; lamariow@gmail.com made admin on the live project, badge confirmed.
-- 11: main bundle 298 kB.
-- Second check: fresh-context reviewer found a profile-creation race, stale watcher updates, delete error handling, an emulator-mode risk and a stuck loading state; all fixed and re-tested.
-- Found on the deploy preview: firebase-admin 14 crashed Netlify functions (jwks-rsa 4 -> ESM-only jose 6); pinned firebase-admin 13.
-
-### Reference to match
-
-The app's own redesign: `docs/REDESIGN.md`, `CLAUDE.md` design principles, and
-the existing bottom sheet (`components/ui/BottomSheet.tsx`, used for the
-instructor passcode). The account sheet should look like it belongs.
-
-### Second check
-
-A fresh-context reviewer subagent given only this spec, the criteria and the
-diff (no Codex plugin in this session). Same model, independent context.
-
-### Open questions
-
-- Google sign-in must be enabled in the Firebase console, and the deploy-preview
-  domain added to Auth's authorized domains. These change the live project; ask
-  first. (user approves)
+- None for slice 1. (Slice 3 will need the Google Sheet shared with the
+  service account's email.)

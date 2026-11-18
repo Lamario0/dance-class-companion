@@ -28,6 +28,12 @@
   status = 200
   force = true
 
+# Class QR codes (attendance) open /checkin/<slotId>: serve the app, which reads the id from the path.
+[[redirects]]
+  from = "/checkin/*"
+  to = "/index.html"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]
