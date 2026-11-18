@@ -47,6 +47,8 @@ export enum Tab {
   STUDENTS = 'STUDENTS',
   SLOTS = 'SLOTS',
   ATTENDANCE = 'ATTENDANCE',
+  /** admins: who came to each class (attendance slice 2) */
+  CLASS_ATTENDANCE = 'CLASS_ATTENDANCE',
   /** the screen a class QR opens (/checkin/<slotId>) */
   CHECKIN = 'CHECKIN'
 }

@@ -98,3 +98,68 @@ export const dayLabel = (date: string) => {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
   });
 };
+
+// --- Slice 2: admin attendance tools ---------------------------------------
+
+/** Today's studio day (America/Detroit), YYYY-MM-DD. Same rule as the server. */
+export const studioToday = (at: Date = new Date()) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit', year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+
+/** YYYY-MM-DD `n` days from `date` (calendar arithmetic, no time zones). */
+export const shiftDate = (date: string, n: number) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+};
+
+export interface DayCheckin extends Checkin {
+  uid: string | null;
+  guestId: string | null;
+  name: string;
+  method: 'qr' | 'manual';
+}
+
+/** Admins: every check-in on one studio day. */
+export const subscribeCheckinsOn = (date: string, onChange: (rows: DayCheckin[]) => void, onError: (e: FirestoreError) => void) =>
+  onSnapshot(
+    query(collection(db, 'checkins'), where('date', '==', date)),
+    snap =>
+      onChange(
+        snap.docs.map(s => {
+          const d = s.data();
+          return {
+            id: s.id,
+            slotId: d.slotId,
+            slotLabel: d.slotLabel ?? '',
+            title: d.title ?? '',
+            date: d.date,
+            at: (d.at as Timestamp | null)?.toDate?.() ?? null,
+            uid: typeof d.uid === 'string' ? d.uid : null,
+            guestId: typeof d.guestId === 'string' ? d.guestId : null,
+            name: d.name ?? '',
+            method: d.method === 'manual' ? 'manual' : 'qr',
+          };
+        }),
+      ),
+    onError,
+  );
+
+export interface Guest {
+  id: string;
+  name: string;
+}
+
+export const subscribeGuests = (onChange: (rows: Guest[]) => void, onError: (e: FirestoreError) => void) =>
+  onSnapshot(
+    collection(db, 'guests'),
+    snap => onChange(snap.docs.map(s => ({ id: s.id, name: s.data().name ?? '' })).sort((a, b) => a.name.localeCompare(b.name))),
+    onError,
+  );
+
+export const createGuest = async (name: string, adminUid: string) =>
+  (await addDoc(collection(db, 'guests'), { name: name.trim(), createdAt: serverTimestamp(), createdBy: adminUid })).id;
+
+export const renameGuest = (id: string, name: string) => updateDoc(doc(db, 'guests', id), { name: name.trim() });
+
+/** The day's first check-in (earliest time; pending server times last; then id). Its title is "the title recorded that day". Same rule as /api/admin/checkin. */
+export const firstOfDay = <T extends { at: Date | null; id: string }>(rows: T[]): T | undefined =>
+  [...rows].sort((a, b) => (a.at?.getTime() ?? Infinity) - (b.at?.getTime() ?? Infinity) || a.id.localeCompare(b.id))[0];

@@ -2,7 +2,7 @@
 // Account now; admins also get an Admin section (filled in by slice 4).
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, X, NotebookPen, UserRound, ShieldCheck, Users, QrCode, CalendarCheck } from 'lucide-react';
+import { Menu, X, NotebookPen, UserRound, ShieldCheck, Users, QrCode, CalendarCheck, ClipboardList } from 'lucide-react';
 import { useAccount } from '../auth/AuthProvider';
 
 /** Hamburger button for the header; renders nothing when signed out. */
@@ -42,11 +42,13 @@ interface SideMenuProps {
   /** admins only: Class slots (attendance QR codes) */
   onSlots: () => void;
   onAttendance: () => void;
+  /** admins only: who came to each class */
+  onClassAttendance: () => void;
   /** the header button, so focus can return to it */
   returnFocusTo: React.RefObject<HTMLButtonElement>;
 }
 
-export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAccount, onStudents, onSlots, onAttendance, returnFocusTo }) => {
+export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAccount, onStudents, onSlots, onAttendance, onClassAttendance, returnFocusTo }) => {
   const { user, displayName, isAdmin } = useAccount();
   const panelRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(open);
@@ -205,6 +207,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAc
               <p className="eyebrow mb-2 flex items-center gap-1.5 px-3"><ShieldCheck className="h-3.5 w-3.5" /> Admin</p>
               {item('Students & roles', <Users className="h-[18px] w-[18px]" />, onStudents, 'Accounts, admins')}
               {item('Class slots', <QrCode className="h-[18px] w-[18px]" />, onSlots, 'Check-in QR codes')}
+              {item('Attendance', <ClipboardList className="h-[18px] w-[18px]" />, onClassAttendance, 'Who came, add people')}
             </section>
           )}
         </nav>

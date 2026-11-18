@@ -187,12 +187,33 @@ service cloud.firestore {
       }
     }
 
-    // Check-ins: written only by /api/checkin (Admin SDK). A student reads their
-    // own; admins read all.
+    // Check-ins: written only by the server (/api/checkin, /api/admin/checkin*),
+    // never the browser. A student reads their own; admins read all. Guest
+    // check-ins (slice 2) have no uid.
     match /checkins/{checkinId} {
       allow read: if request.auth != null
-        && (resource.data.uid == request.auth.uid || isVerifiedAdmin());
+        && (resource.data.get('uid', null) == request.auth.uid || isVerifiedAdmin());
       allow write: if false;
+    }
+
+    // Guests (attendance slice 2): people without an account, added by admins so
+    // their attendance adds up. Admins only; renamed, never deleted.
+    match /guests/{guestId} {
+      allow read: if isVerifiedAdmin();
+      allow create: if isVerifiedAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'createdAt', 'createdBy'])
+        && request.resource.data.keys().hasAll(['name', 'createdAt', 'createdBy'])
+        && isGuestName(request.resource.data.name)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && isGuestName(request.resource.data.name);
+      allow delete: if false;
+
+      function isGuestName(n) {
+        return n is string && n.trim().size() > 0 && n.size() <= 60;
+      }
     }
 
     function isVerifiedAdmin() {

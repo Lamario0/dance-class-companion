@@ -13,6 +13,18 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Main bundle limit raised from 320 to 330 kB.
 - Guardrails added: ask before editing the calculator files and before `firebase deploy`.
 
+## 2026-11-18 - Attendance slice 2 (admin tools)
+
+- Approved: guests are a saved list (`guests/{id}`, admins only, renamed never deleted); admins check people in for today or past days, never future; any check-in (QR or manual) can be removed (hard delete); a new Admin > Attendance page holds headcounts and who came.
+- Manual check-ins use the same `checkins` id scheme (`slotId__date__uid`, guests `slotId__date__g_<guestId>`), so a QR scan and a manual add can't double up. Written only by `/api/admin/checkin` and `/api/admin/checkin-remove`.
+- A past day's check-in takes the title already recorded that day for the slot, else the slot's current title. New check-ins only go to active slots; archived slots still show on days they have check-ins.
+- Guest names in the admin list are live (a rename shows everywhere); account names are the snapshot taken at check-in, as in slice 1.
+- The list shows a time only for QR scans; a manual add's time is when the admin typed it.
+- "The title recorded that day" = the day's first check-in for that slot (earliest time), in both the function and the page, so they agree if a title is changed mid-day.
+- Accepted: guests are read and renamed straight from the browser under the rules, so (like chat moderation) a just-removed admin can still do that for up to an hour; the two check-in functions refuse them at once.
+- Accepted: an admin can add a check-in for a past day before the slot existed; it takes the slot's current title.
+- Not in slice 2: linking a guest to an account later (needed for levels, slice 5).
+
 ## 2026-11-17 - Attendance slice 1 build notes
 
 - Known limitation (follows from "static, always open"): anyone with a slot's link (a photo of the poster, a shared link) can check in from anywhere. Still once per slot per day, and only for verified accounts. Revisit if it's abused (e.g. a rotating code or an admin review in slice 2).
