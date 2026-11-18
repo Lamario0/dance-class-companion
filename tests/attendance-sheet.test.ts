@@ -238,3 +238,24 @@ test('a slow sheet never holds a QR check-in past ~4 s', async () => {
   }
   noOutage();
 });
+
+test('a scan and a removal at the same moment hit the right rows (writers take turns)', async () => {
+  noOutage();
+  const a = await makeAccount('race-a');
+  const b = await makeAccount('race-b');
+  await call(addCheckin, boss.token, { slotId: SLOT2, date: daysAgo(1), uid: a.uid });
+  const victim = checkinId(SLOT2, daysAgo(1), a.uid);
+  const before = book.attendance().map(r => r[7]).filter(id => id !== victim);
+  book.delayMs = 80; // every sheet call is slow, so the two writes overlap
+  const [scan, removal] = await Promise.all([
+    call(qrCheckin, b.token, { slotId: SLOT2 }),
+    call(removeCheckin, boss.token, { id: victim }),
+  ]);
+  noOutage();
+  assert.equal(scan.body.status, 'checked-in');
+  assert.equal(removal.body.status, 'removed');
+  const after = book.attendance().map(r => r[7]);
+  assert.equal(after.includes(victim), false);
+  assert.ok(after.includes(checkinId(SLOT2, today(), b.uid)));
+  for (const id of before) assert.ok(after.includes(id), `row ${id} survived`);
+});

@@ -63,6 +63,7 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   const recorded = [...sameDay.docs].sort((a, b) => atMs(a) - atMs(b) || a.id.localeCompare(b.id))[0]?.data();
   // (No check-in yet that day: the Slots worksheet's values when it has a row, slice 3A.)
   const api = sheetLooksDown() ? null : sheetsApi();
+  const sheetBudgetEnds = Date.now() + 3000;
   const current = recorded ? null : await sheetSlot(api, slotId);
   const title = typeof recorded?.title === 'string' ? recorded.title : (current?.title ?? (slot.title as string));
   const slotLabel = typeof recorded?.slotLabel === 'string' ? recorded.slotLabel : (current?.label ?? (slot.label as string));
@@ -87,7 +88,7 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
     console.error('admin-checkin failed', err);
     return json({ error: "Couldn't check them in. Please try again." }, 500);
   }
-  await writeNow(sheetLooksDown() ? null : api, db, [id], 2500); // its Attendance row (slice 3B)
+  await writeNow(sheetLooksDown() ? null : api, db, [id], Math.min(2500, sheetBudgetEnds - Date.now())); // its Attendance row (slice 3B)
   return json({ status: 'checked-in', id, name, title, label: slotLabel, date });
 });
 

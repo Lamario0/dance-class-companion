@@ -60,7 +60,7 @@ const cellSerial = (v: string | undefined): number | null => {
   return m ? serialOf(s) : null;
 };
 
-const text = (s: string) => ({ userEnteredValue: { stringValue: s }, userEnteredFormat: {} });
+const text = (s: string) => ({ userEnteredValue: { stringValue: s } });
 const cells = (r: AttendanceRow) => [
   { userEnteredValue: { numberValue: serialOf(r.date) }, userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'mm-dd-yyyy' } } },
   r.method === 'qr' && r.at
@@ -86,6 +86,39 @@ export const resetAttendanceCache = () => {
   sheetIdCache = null;
 };
 
+// Every Attendance write reads row positions and then sends a batch. Two writers
+// at once (a scan inserting at the top while an admin removes someone) could shift
+// rows in between and hit the wrong row, so writers take turns: a short lease in
+// Firestore (sheetSync/attendanceLock), released at the end, expiring after 15 s.
+const LOCK = 'sheetSync/attendanceLock';
+const LEASE_MS = 15_000;
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+export const withAttendanceLock = async <T,>(db: Firestore, waitMs: number, fn: () => Promise<T>): Promise<T> => {
+  const me = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const ref = db.doc(LOCK);
+  const giveUp = Date.now() + waitMs;
+  for (;;) {
+    const got = await db.runTransaction(async tx => {
+      const held = (await tx.get(ref)).data();
+      if (held && held.until > Date.now()) return false;
+      tx.set(ref, { owner: me, until: Date.now() + LEASE_MS });
+      return true;
+    });
+    if (got) break;
+    if (Date.now() > giveUp) throw new Error('attendance sheet busy');
+    await sleep(150);
+  }
+  try {
+    return await fn();
+  } finally {
+    await db
+      .runTransaction(async tx => {
+        if ((await tx.get(ref)).data()?.owner === me) tx.delete(ref);
+      })
+      .catch(() => {});
+  }
+};
+
 /** The worksheet's rows (from row 2), read right before writing. */
 const readRows = async (api: SheetsApi) =>
   (await api.get(`${ATTENDANCE}!A2:H`, 'unformatted')).map(r => ({ serial: cellSerial(r[0]), id: (r[7] ?? '').trim() }));
@@ -107,7 +140,8 @@ export const upsertAttendance = async (api: SheetsApi, rows: AttendanceRow[]) =>
       requests.push({ insertDimension: { range: { sheetId, dimension: 'ROWS', startIndex: i + 1, endIndex: i + 2 }, inheritFromBefore: false } });
       model.splice(i, 0, { serial, id: r.id });
     }
-    requests.push({ updateCells: { start: { sheetId, rowIndex: i + 1, columnIndex: 0 }, rows: [{ values: cells(r) }], fields: 'userEnteredValue,userEnteredFormat' } });
+    // Only values and number formats: colours or wrapping set by hand survive a rewrite.
+    requests.push({ updateCells: { start: { sheetId, rowIndex: i + 1, columnIndex: 0 }, rows: [{ values: cells(r) }], fields: 'userEnteredValue,userEnteredFormat.numberFormat' } });
   }
   await api.batch(requests);
 };
@@ -138,15 +172,22 @@ const markSynced = async (db: Firestore, snaps: DocumentSnapshot[]) => {
  * On failure the check-in stays `pending` for the job. Never throws.
  */
 export const writeNow = async (api: SheetsApi | null, db: Firestore, ids: string[], ms: number) => {
-  if (!api || !ids.length) return false;
+  if (!api || !ids.length || ms < 300) return false;
   try {
-    const snaps = (await db.getAll(...ids.map(id => db.doc(`checkins/${id}`)))).filter(s => s.exists);
-    await withTimeout(upsertAttendance(api, snaps.map(s => rowFor(s.id, s.data()!))), ms);
-    await markSynced(db, snaps);
+    // The whole attempt (lock, reads, sheet, marking synced) fits in `ms`.
+    await withTimeout(
+      withAttendanceLock(db, ms, async () => {
+        const snaps = (await db.getAll(...ids.map(id => db.doc(`checkins/${id}`)))).filter(s => s.exists);
+        await upsertAttendance(api, snaps.map(s => rowFor(s.id, s.data()!)));
+        await markSynced(db, snaps);
+      }),
+      ms,
+    );
     return true;
   } catch (err) {
     console.warn('attendance row left for the sync job', err);
     noteSheetDown();
+    resetAttendanceCache();
     return false;
   }
 };
@@ -155,10 +196,11 @@ export const writeNow = async (api: SheetsApi | null, db: Firestore, ids: string
 export const removeNow = async (api: SheetsApi | null, db: Firestore, id: string, ms: number) => {
   try {
     if (!api) throw new Error('sheet not connected');
-    await withTimeout(deleteAttendance(api, [id]), ms);
+    await withTimeout(withAttendanceLock(db, ms, () => deleteAttendance(api, [id])), ms);
     return true;
   } catch (err) {
     console.warn('attendance row delete queued', err);
+    resetAttendanceCache();
     await db.doc(`sheetDeletes/${id}`).set({ at: FieldValue.serverTimestamp() });
     return false;
   }
@@ -172,7 +214,7 @@ export const renameCheckins = async (db: Firestore, api: SheetsApi | null, field
   const docs = (await db.collection('checkins').where(field, '==', key).get()).docs.filter(d => d.data().name !== name);
   for (let i = 0; i < docs.length; i += 400) {
     const batch = db.batch();
-    docs.slice(i, i + 400).forEach(d => batch.update(d.ref, { name, sheet: 'pending' }));
+    docs.slice(i, i + 400).forEach(d => batch.update(d.ref, { name, sheet: 'pending', sheetAt: FieldValue.serverTimestamp() }));
     await batch.commit();
   }
   if (docs.length) await writeNow(api, db, docs.map(d => d.id), 6000);
@@ -180,11 +222,21 @@ export const renameCheckins = async (db: Firestore, api: SheetsApi | null, field
 };
 
 /** The job's part: first-run backfill, queued deletes, pending rows. */
-export const syncAttendance = async (api: SheetsApi, db: Firestore) => {
+export const syncAttendance = (api: SheetsApi, db: Firestore) =>
+  withAttendanceLock(db, 10_000, () => syncAttendanceLocked(api, db)).catch(err => {
+    resetAttendanceCache();
+    throw err;
+  });
+
+/** Ones a check-in or rename started writing in the last 90 s are left to it. */
+const notFresh = (d: FirebaseFirestore.QueryDocumentSnapshot, cutoff: number) => (d.data().sheetAt?.toMillis?.() ?? 0) < cutoff;
+
+const syncAttendanceLocked = async (api: SheetsApi, db: Firestore) => {
+  const cutoff = Date.now() - 90_000;
   const state = db.doc('sheetSync/attendance');
   let backfilled = 0;
   if ((await state.get()).data()?.backfilled !== true) {
-    const all = (await db.collection('checkins').get()).docs.filter(d => d.data().sheet !== 'synced');
+    const all = (await db.collection('checkins').get()).docs.filter(d => d.data().sheet !== 'synced' && notFresh(d, cutoff));
     await upsertAttendance(api, all.map(d => rowFor(d.id, d.data())));
     await markSynced(db, all);
     await state.set({ backfilled: true, at: FieldValue.serverTimestamp() }, { merge: true });
@@ -199,10 +251,9 @@ export const syncAttendance = async (api: SheetsApi, db: Firestore) => {
   await deleteAttendance(api, queued.map(q => q.id).filter(id => !stillThere.has(id)));
   for (const q of queued) await q.ref.delete();
 
-  // Pending rows; ones a check-in started writing in the last 90 s are left to it.
-  const cutoff = Date.now() - 90_000;
+  // Pending rows (very fresh ones are left to whoever is writing them).
   const pending = (await db.collection('checkins').where('sheet', '==', 'pending').get()).docs.filter(
-    d => (d.data().sheetAt?.toMillis?.() ?? 0) < cutoff || stillThere.has(d.id),
+    d => notFresh(d, cutoff) || stillThere.has(d.id),
   );
   await upsertAttendance(api, pending.map(d => rowFor(d.id, d.data())));
   await markSynced(db, pending);

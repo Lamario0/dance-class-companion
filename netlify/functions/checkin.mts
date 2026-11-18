@@ -40,6 +40,7 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   // The sheet read runs alongside the profile read, so it adds as little wait as possible.
   // Skip the sheet for a minute after it failed, so an outage never slows every scan.
   const api = sheetLooksDown() ? null : sheetsApi();
+  const sheetBudgetEnds = Date.now() + 3000; // all sheet work for this scan, so it answers within ~4 s
   const [fromSheet, profileSnap] = await Promise.all([sheetSlot(api, slotId), db.doc(`users/${user.uid}`).get()]);
   const label = fromSheet?.label ?? (slot.label as string);
   const title = fromSheet?.title ?? (slot.title as string);
@@ -71,7 +72,7 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
     return json({ error: "Couldn't check you in. Please try again." }, 500);
   }
   // Its Attendance row (slice 3B): now if the sheet answers quickly, else the job writes it.
-  await writeNow(sheetLooksDown() ? null : api, db, [ref.id], 2500);
+  await writeNow(sheetLooksDown() ? null : api, db, [ref.id], Math.min(2500, sheetBudgetEnds - Date.now()));
   return json({ status: 'checked-in', ...result });
 });
 
