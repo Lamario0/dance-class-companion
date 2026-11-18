@@ -27,6 +27,16 @@ export const deleteAccountData = async (uid: string) => {
     );
     await batch.commit();
   }
+  // Check-ins stay so headcounts stay right, relabelled the same way (slice 3B);
+  // `sheet: 'pending'` makes the sync job rewrite their Attendance rows.
+  const checkins = await db.collection('checkins').where('uid', '==', uid).get();
+  for (let i = 0; i < checkins.docs.length; i += 400) {
+    const batch = db.batch();
+    checkins.docs.slice(i, i + 400).forEach(d =>
+      batch.update(d.ref, { name: 'Former student', uid: FieldValue.delete(), sheet: 'pending' }),
+    );
+    await batch.commit();
+  }
   try {
     await adminAuth().deleteUser(uid);
   } catch (err: any) {

@@ -2,6 +2,7 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { NotebookPen } from 'lucide-react';
 import { DanceClass, VideoItem } from '../types';
+import { splitPatterns } from '../services/dataService';
 import { useAccount } from './auth/AuthProvider';
 import { VideoFacade } from './YouTubeEmbed';
 import { EmptyState, NoteDoodle, SparkleDoodle, FootprintsDoodle, SwirlDoodle } from './ui/Doodles';
@@ -98,7 +99,7 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ classes, videoOfMonth,
       {classes.length > 0 ? (
         <div className="stagger grid auto-rows-fr gap-4 md:grid-cols-2 md:gap-6">
           {classes.map((cls, i) => {
-            const patterns = cls.content.split(',').map(s => s.trim()).filter(Boolean);
+            const patterns = splitPatterns(cls.content);
             return (
               <article key={cls.id} className="card flex h-full min-h-0 flex-col p-5 md:p-6" style={{ ['--i' as any]: i }}>
                 {cls.when && <p className="eyebrow mb-1 text-accent/90">{cls.when}</p>}

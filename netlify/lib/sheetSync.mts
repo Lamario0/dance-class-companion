@@ -10,7 +10,8 @@
 // rows for columns that have none; it never edits or deletes a row (Notes are
 // typed by hand).
 import type { Firestore } from 'firebase-admin/firestore';
-import { NOT_DANCE, colLetter, sheetRef, withTimeout, type SheetsApi } from './sheets.mts';
+import { NOT_DANCE, colLetter, noteSheetDown, sheetRef, withTimeout, type SheetsApi } from './sheets.mts';
+import { syncAttendance } from './attendanceSheet.mts';
 
 export interface SlotValues {
   label: string;
@@ -56,15 +57,16 @@ export const findSlotRow = async (api: SheetsApi, id: string) => (await readSlot
 
 /**
  * The slot's label and class as the sheet has them, for a check-in. Null when the
- * sheet isn't connected, is slow (2.5 s), has no row for it, or the row is unusable.
+ * sheet isn't connected, is slow (1.5 s), has no row for it, or the row is unusable.
  */
 export const sheetSlot = async (api: SheetsApi | null, id: string): Promise<{ label: string; title: string } | null> => {
   if (!api) return null;
   try {
-    const row = (await withTimeout(readSlotRows(api), 2500)).find(r => r.id === id);
+    const row = (await withTimeout(readSlotRows(api), 1500)).find(r => r.id === id);
     return row && isSlotText(row.label) && isSlotText(row.title) ? { label: row.label, title: row.title } : null;
   } catch (err) {
     console.warn('sheet read at check-in failed; using the app title', err);
+    noteSheetDown();
     return null;
   }
 };
@@ -136,7 +138,7 @@ export const classRow = (sheet: string, col: number) => {
 /** Add a Classes row for each class column that has none. Returns how many were added. */
 export const refreshClasses = async (api: SheetsApi) => {
   const have = new Set<string>();
-  for (const [f] of await api.get('Classes!B2:B', true)) {
+  for (const [f] of await api.get('Classes!B2:B', 'formula')) {
     const m = REF.exec(f ?? '');
     if (m) have.add(`${(m[1] ?? m[2]).replace(/''/g, "'")}!${m[3]}`);
   }
@@ -149,5 +151,6 @@ export const refreshClasses = async (api: SheetsApi) => {
 export const syncSheet = async (api: SheetsApi, db: Firestore) => {
   const slots = await syncSlots(api, db);
   const classes = await refreshClasses(api);
-  return { slots, classes };
+  const attendance = await syncAttendance(api, db);
+  return { slots, classes, attendance };
 };

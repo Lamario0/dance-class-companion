@@ -9,78 +9,18 @@ process.env.GCLOUD_PROJECT = 'dance-class-companion';
 process.env.DCC_USE_EMULATORS = '1';
 
 const { adminAuth, adminDb } = await import('../netlify/lib/firebaseAdmin.mts');
-const { setSheetsApiForTests, colLetter } = await import('../netlify/lib/sheets.mts');
+const { setSheetsApiForTests, colLetter, resetSheetDown } = await import('../netlify/lib/sheets.mts');
 const { syncSheet, refreshClasses, classRow } = await import('../netlify/lib/sheetSync.mts');
 const { default: saveSlot } = await import('../netlify/functions/admin-slot.mts');
 const { default: sheetSync } = await import('../netlify/functions/admin-sheet-sync.mts');
 const { default: qrCheckin } = await import('../netlify/functions/checkin.mts');
 const { default: addCheckin } = await import('../netlify/functions/admin-checkin.mts');
-type SheetsApi = import('../netlify/lib/sheets.mts').SheetsApi;
-
-// --- an in-memory workbook -------------------------------------------------------
-const colIndex = (l: string) => [...l].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0) - 1;
-class FakeBook implements SheetsApi {
-  grids = new Map<string, string[][]>();
-  row1 = new Map<string, { text: string; checkbox: boolean }[]>();
-  failing = false;
-  writes = 0;
-  rawWrites = 0;
-  grid(name: string) {
-    if (!this.grids.has(name)) this.grids.set(name, []);
-    return this.grids.get(name)!;
-  }
-  private parse(range: string) {
-    const m = /^(?:'((?:[^']|'')+)'|([^!]+))!([A-Z]+)(\d*)(?::([A-Z]+)(\d*))?$/.exec(range)!;
-    return { sheet: (m[1] ?? m[2]).replace(/''/g, "'"), c0: colIndex(m[3]), r0: m[4] ? +m[4] - 1 : 0, c1: colIndex(m[5] ?? m[3]), r1: m[6] ? +m[6] - 1 : Infinity };
-  }
-  private check() {
-    if (this.failing) throw new Error('sheet down');
-  }
-  async get(range: string, formulas = false) {
-    this.check();
-    const { sheet, c0, r0, c1, r1 } = this.parse(range);
-    const g = this.grid(sheet);
-    const out: string[][] = [];
-    for (let r = r0; r < Math.min(g.length, r1 + 1); r++) {
-      const row = (g[r] ?? []).slice(c0, c1 + 1).map(v => (!formulas && v.startsWith('=') ? '(computed)' : v));
-      out.push(row);
-    }
-    return out;
-  }
-  async update(range: string, rows: (string | boolean)[][], asText = false) {
-    this.check();
-    this.writes++;
-    if (asText) this.rawWrites++;
-    const { sheet, c0, r0 } = this.parse(range);
-    const g = this.grid(sheet);
-    rows.forEach((row, i) => {
-      g[r0 + i] = g[r0 + i] ?? [];
-      row.forEach((v, j) => (g[r0 + i][c0 + j] = String(v)));
-    });
-  }
-  async append(range: string, rows: (string | boolean)[][], asText = false) {
-    this.check();
-    this.writes++;
-    if (asText) this.rawWrites++;
-    const { sheet } = this.parse(range);
-    const g = this.grid(sheet);
-    let last = g.length;
-    while (last > 0 && !(g[last - 1] ?? []).some(Boolean)) last--;
-    rows.forEach((row, i) => (g[last + i] = row.map(String)));
-  }
-  async meta() {
-    this.check();
-    const titles = new Set([...this.grids.keys(), ...this.row1.keys()]);
-    return [...titles].map(title => ({ title, row1: this.row1.get(title) ?? [] }));
-  }
-  slotRow(id: string) {
-    return this.grid('Slots').find(r => r[3] === id);
-  }
-}
+const { FakeBook } = await import('./fakeBook.ts');
 
 const book = new FakeBook();
 book.grid('Slots')[0] = ['Slot', 'Class', 'Archived', 'Slot ID'];
 book.grid('Classes')[0] = ['Dance', 'Class', 'Patterns covered', 'Notes', 'Column'];
+book.grid('Attendance')[0] = ['Date', 'Time', 'Slot', 'Class', 'Name', 'How', 'Guest', 'Check-in ID'];
 setSheetsApiForTests(book);
 after(() => setSheetsApiForTests(undefined));
 
@@ -223,6 +163,7 @@ test('check-ins record the Slots worksheet\'s class; the app title if the sheet 
   book.failing = true;
   const r2 = await call(qrCheckin, student.token, { slotId: other.body.slot.id });
   book.failing = false;
+  resetSheetDown(); // the check-in saw the outage and skips the sheet for a minute
   assert.equal(r2.body.status, 'checked-in');
   assert.equal(r2.body.title, 'Musicality');
 
