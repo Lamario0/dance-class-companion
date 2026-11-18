@@ -3,11 +3,14 @@
 // Once per slot per studio day (America/Detroit): the check-in id is
 // "<slotId>__<YYYY-MM-DD>__<uid>", created with create() so a repeat is a no-op.
 // Snapshots the slot's current title and label, so later title edits don't
-// rewrite history. Slice 3 will also append the row to the Google Sheet here.
+// rewrite history. The label and title come from the Slots worksheet when it has
+// a row for the slot (slice 3A: the sheet wins), else from the slot itself.
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminConfigured, adminDb, json, verifyUser } from '../lib/firebaseAdmin.mts';
 import { withAppCors } from '../lib/cors.mts';
 import { studioDate, checkinId } from '../lib/studio.mts';
+import { sheetsApi } from '../lib/sheets.mts';
+import { sheetSlot } from '../lib/sheetSync.mts';
 
 export default withAppCors(async (req: Request, _context?: unknown) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -33,19 +36,23 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
     return json({ error: "This code isn't active.", code: 'inactive' }, 404);
   }
 
-  const profile = (await db.doc(`users/${user.uid}`).get()).data();
+  // The sheet read runs alongside the profile read, so it adds as little wait as possible.
+  const [fromSheet, profileSnap] = await Promise.all([sheetSlot(sheetsApi(), slotId), db.doc(`users/${user.uid}`).get()]);
+  const label = fromSheet?.label ?? (slot.label as string);
+  const title = fromSheet?.title ?? (slot.title as string);
+  const profile = profileSnap.data();
   const name = (profile?.displayName as string) || user.name || user.email?.split('@')[0] || 'Dancer';
   const date = studioDate();
   const ref = db.doc(`checkins/${checkinId(slotId, date, user.uid)}`);
-  const result = { title: slot.title as string, label: slot.label as string, date };
+  const result = { title, label, date };
 
   try {
     await ref.create({
       uid: user.uid,
       name,
       slotId,
-      slotLabel: slot.label,
-      title: slot.title,
+      slotLabel: label,
+      title,
       date,
       at: FieldValue.serverTimestamp(),
       method: 'qr',

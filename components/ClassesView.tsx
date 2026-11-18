@@ -101,6 +101,7 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ classes, videoOfMonth,
             const patterns = cls.content.split(',').map(s => s.trim()).filter(Boolean);
             return (
               <article key={cls.id} className="card flex h-full min-h-0 flex-col p-5 md:p-6" style={{ ['--i' as any]: i }}>
+                {cls.when && <p className="eyebrow mb-1 text-accent/90">{cls.when}</p>}
                 <h3 className="text-[21px] font-bold leading-snug text-text-hi">{cls.name}</h3>
 
                 <p className="eyebrow mt-4 mb-1">This week's pattern</p>

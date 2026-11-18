@@ -30,10 +30,149 @@ Only the current slice is specced. Later ones are specced when reached.
 | # | Slice | State |
 |---|---|---|
 | 1 | Slots + QR check-in: admins create slots with printable QR codes; a signed-in student scans and is checked into the slot's current class (once per day); "My attendance" page | done (live 2026-11-18) |
-| 2 | Admin attendance tools: manual check-in (including people without an account, admin-added only), per-class headcount and who came | specced below |
-| 3 | Google Sheet sync both ways: each check-in becomes a row in an Attendance tab; slot titles editable in a Slots tab and read back by the app | not specced |
+| 2 | Admin attendance tools: manual check-in (including people without an account, admin-added only), per-class headcount and who came | done (live 2026-11-18) |
+| 3 | Syllabus-driven classes and sheet sync: class cards come from a Classes worksheet built from the syllabus; slots in a Slots worksheet both ways (3A); every check-in becomes an Attendance row (3B) | specced below (awaiting approval) |
 | 4 | Android: scanning a QR opens the app (app links) and/or an in-app scanner | not specced |
 | 5 | Levels and progress: classes toward the next level, shown to students | not specced |
+
+---
+
+## Slice 3 - Syllabus-driven classes and Google Sheet sync
+
+Built and shipped in two parts, each its own PR: **3A** (class content from
+the syllabus, slots in the sheet) and **3B** (attendance rows).
+
+### The workbook (set up 2026-11-18)
+
+The "Syllabus" workbook (`1VuTfGDldybCC8Lv0FSQG8acMSQ681X93NgUVAXg89Ls`) now
+has three new worksheets:
+
+- **Classes** - one row per class column of every *dance worksheet*:
+  Dance | Class | Patterns covered | Notes | Column. Class, Patterns covered
+  and Column are live formulas pointing at the dance worksheet, so a ticked
+  box or a renamed title shows at once, and inserting columns in a dance
+  worksheet doesn't break them. **Notes** is typed by hand: it is what
+  students see as the instructor notes. 30 WCS rows exist now.
+- **Slots** - Slot | Class | Archived | Slot ID. Class is a dropdown of the
+  titles in Classes. Empty until 3A fills it from the app.
+- **Attendance** - Date | Time | Slot | Class | Name | How | Guest |
+  Check-in ID. Date shows `11-18-2026`, Time `7:04 PM`. Empty until 3B.
+
+**Dance worksheet layout** (WCS is the model; Carolina Shag, C2S, Modern
+Hustle, NC2S, Salsa and Waltz will be converted to it by the user):
+
+- Row 1: a class title, with its checkbox column directly to the right.
+- Under it, the patterns/content for that class, each with a checkbox.
+- A green row reading "Technique" or "Basic Patterns or Technique" ends the
+  patterns. Below it is the instructor's own technique/notes area, never
+  shown in the app.
+- A grey empty column separates levels.
+- Not dance worksheets: "webapp data", "Random Notes", "Classes", "Slots",
+  "Attendance". A worksheet counts as a dance worksheet only once row 1 has
+  a title with a checkbox to its right, so unconverted ones are skipped.
+
+### What it does
+
+**3A - classes and slots**
+- **Classes stays complete:** a server job (every 15 min, plus a "Refresh
+  class list" button on the admin Class slots page) adds a Classes row for
+  any new class column or newly converted dance worksheet. It never edits
+  Notes and never deletes a row; a row whose column was deleted shows an
+  error and is highlighted for the user to remove.
+- **The app's class cards come from Classes:** the home screen shows one
+  card per *active slot*: the slot's class title, its day/time, the patterns
+  ticked for that class, and its Notes. The class block in "webapp data"
+  (rows 1-5) is no longer read; songs, videos and announcements still are.
+- **Slots both ways:** creating, editing or archiving a slot in the app
+  writes its Slots row. Changing a slot's Class (or its Slot label) in the
+  sheet changes it in the app: read on each load like class content today,
+  and read again by the server at check-in so the check-in records it.
+  Slots are only created in the app.
+- The app's slot editor picks the class from the Classes titles instead of
+  free text.
+
+**3B - attendance rows**
+- Every check-in (QR or admin-added) becomes an Attendance row, newest at the
+  top. Time is the QR scan time, blank for admin-added. Guest says "yes" for
+  guests. Removing a check-in deletes its row.
+- If the sheet can't be reached, the check-in still succeeds; the 15-minute
+  job writes waiting rows and deletions. Check-ins from before 3B are written
+  on the first run.
+
+### Confirmed decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Worksheets | Classes, Slots, Attendance in the Syllabus workbook | User choice |
+| Classes source | Row-1 titles of every dance worksheet; patterns = ticked boxes above the green Technique row | User choice |
+| What the app shows | Classes of active slots (one card per active slot) | User choice |
+| Instructor notes | The Notes column in Classes, typed by hand; the technique area stays private | User choice |
+| Other dances | Converted to the WCS layout by the user; skipped until then | User choice |
+| Slots | Third worksheet; Slot, Class, Archived, Slot ID; renaming the Slot label in the sheet renames it in the app; slots only created in the app | User choice |
+| Which value wins | The Slots worksheet's label and class when the slot has a row there; otherwise the app's own | App edits also write the sheet |
+| Title read-back | Instantly, on each load, like class content today; the server re-reads at check-in | User choice |
+| Attendance | Columns as above; date `11-18-2026`, time `7:04 PM` studio time; Time blank for admin-added; newest at top | User choice |
+| Removals | Delete the Attendance row; hand edits to Attendance are not read back | User choice |
+| Sheet down | Check in, sync later (job every 15 min); backfill on first run | User choice |
+| Access | Sheets API with the existing service account, shared on the workbook as Editor; the browser keeps reading through the public link (gviz) | User OK'd sharing |
+| Privacy | Accepted: the workbook is link-viewable, so Attendance (names, dates, classes; no emails) can be read by anyone with the link | User choice |
+| Classes formulas | Live sheet formulas, not code, so ticking a box needs no sync | Instant, and survives column inserts |
+
+### Defaults to confirm (Claude's recommendation; say if any is wrong)
+
+1. **Unique titles:** class titles must be unique across the workbook (a
+   slot names its class by title). Repeats are highlighted in Classes, and a
+   slot pointing at a repeated title uses the first one. WCS has "ADV
+   Concepts" six times, so rename those before putting one on a slot.
+2. **Asterisks:** leading/trailing `*` in pattern names are stripped in the
+   app ("**Release Whip" shows as "Release Whip"); the sheet keeps them.
+3. **Card order:** home cards are ordered by slot creation order (the order
+   in the Slots worksheet).
+4. **Student notes:** class notes stay keyed by class title, so when a slot
+   moves from 201-B to 201-C the next week's note is a new entry under
+   "Intermediate 201-C". Notes under old names ("WCS Intermediate 201") stay
+   in My notes.
+5. **Sheet unreachable on load:** the home screen shows the friendly error it
+   shows today; check-ins don't depend on it.
+
+### User actions before building
+
+- Share the workbook with the service account's email as **Editor**.
+- Enable the **Google Sheets API** in the Google Cloud project
+  `dance-class-companion` (Claude gives the link).
+
+### Done means - 3A
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | Classes has exactly one row per titled class column in each dance worksheet; ticking/unticking a box above the green row changes Patterns covered at once; nothing below the green row appears | sheet read via the Sheets connector (already true for WCS) + user ticks a box |
+| 2 | The job/button adds a row for a new class column and for a newly converted worksheet; running it twice adds nothing; Notes and existing rows are never changed or deleted | function test against a test spreadsheet |
+| 3 | The home screen shows one card per active slot with the class title, day/time, ticked patterns and Notes from Classes; a class not found shows the title with "Patterns TBD" | browser preview (phone + desktop) against emulator slots and the live sheet (read only) |
+| 4 | Changing a slot's Class or Slot label in the Slots worksheet shows on the home, check-in and admin pages on the next load, and the next check-in records it | browser preview + function test |
+| 5 | Creating, editing or archiving a slot in the app creates/updates its Slots row; the slot editor offers the Classes titles | function test + test spreadsheet + browser |
+| 6 | Songs, videos and announcements still load from "webapp data"; no code writes "webapp data", the dance worksheets or "Random Notes" | browser + code review |
+| 7 | Only server code with the service account writes the sheet; the browser never can | code review + function tests |
+| 8 | `npm run build` passes; main bundle under 330 kB | build output |
+
+### Done means - 3B
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | A QR check-in and an admin-added check-in each add exactly one Attendance row at the top with the agreed columns and formats (Time blank for admin-added) | function test against a test spreadsheet + user looks at the real sheet |
+| 2 | Removing a check-in deletes its row, and only that row | function test + test spreadsheet |
+| 3 | With the sheet unreachable, check-ins still succeed; the next job run writes them and pending deletions, with no duplicate rows | function test (sheet calls failing, then working) |
+| 4 | The first run writes all earlier check-ins once; running it twice adds nothing | function test |
+| 5 | `npm run build` passes; main bundle under 330 kB | build output |
+
+### Reference to match
+
+The WCS worksheet (layout) and the Classes worksheet as set up on 2026-11-18
+(what the app should show for each class).
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff,
+for each of 3A and 3B.
 
 ---
 

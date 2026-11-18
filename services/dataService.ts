@@ -17,6 +17,9 @@ const DEFAULT_DATA: AppData = {
 };
 
 export const fetchSheetData = async (): Promise<AppData> => {
+  // Slice 3A: class cards come from the Slots + Classes worksheets (in parallel).
+  // null = couldn't read; `empty` = Slots has no rows yet (keep the old block until then).
+  const syllabus = loadSyllabus(true).then(s => ({ cards: syllabusClasses(s), empty: s.slots.length === 0 }), () => null);
   try {
     const response = await fetch(DATA_URL);
     if (!response.ok) throw new Error(`Failed to fetch sheet: ${response.statusText}`);
@@ -204,10 +207,100 @@ export const fetchSheetData = async (): Promise<AppData> => {
       }
     }
 
-    return { classes, videos, songs, announcements };
+    // The old class block (rows 2-5) is only used until the Slots worksheet has rows.
+    // If Slots/Classes can't be read: no cards (the page's empty state) rather than stale ones.
+    const s = await syllabus;
+    return { classes: !s ? [] : s.empty ? classes : s.cards, videos, songs, announcements };
 
   } catch (error) {
     console.error("Fetch Data Error:", error);
+    // Keep the class cards if only "webapp data" failed.
+    const s = await syllabus;
+    if (s && !s.empty) return { ...DEFAULT_DATA, classes: s.cards };
     return DEFAULT_DATA;
   }
 };
+
+// --- Slice 3A: the syllabus (Classes + Slots worksheets) ----------------------
+// Classes: Dance | Class | Patterns covered | Notes | Column (live formulas over
+// the dance worksheets). Slots: Slot | Class | Archived | Slot ID (written by the
+// app; label and class can be edited in the sheet, and the sheet wins).
+
+export interface SyllabusClass {
+  dance: string;
+  title: string;
+  patterns: string[];
+  notes: string;
+}
+export interface SheetSlot {
+  id: string;
+  label: string;
+  title: string;
+  archived: boolean;
+}
+export interface Syllabus {
+  /** by class title; with repeated titles the first row wins */
+  classes: Map<string, SyllabusClass>;
+  /** in worksheet order */
+  slots: SheetSlot[];
+}
+
+const gvizRows = async (sheet: string, range: string): Promise<string[][]> => {
+  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheet)}&range=${range}&headers=1&t=${Date.now()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${sheet}: ${res.status}`);
+  const m = (await res.text()).match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
+  if (!m) throw new Error(`Could not parse ${sheet}`);
+  const data = JSON.parse(m[1]);
+  if (data.status === 'error') throw new Error(`No ${sheet} worksheet`);
+  return (data.table.rows ?? []).map((r: any) => (r.c ?? []).map((c: any) => (c && c.v != null ? String(c.f ?? c.v).trim() : '')));
+};
+
+/** "**Release Whip" -> "Release Whip": the sheet's asterisks are the instructor's own marks. */
+export const cleanPattern = (p: string) => p.replace(/^\*+|\*+$/g, '').trim();
+
+let syllabusCache: Promise<Syllabus> | null = null;
+
+/** The Classes and Slots worksheets (cached for the page; `fresh` refetches). */
+export const loadSyllabus = (fresh = false): Promise<Syllabus> => {
+  if (fresh || !syllabusCache) {
+    syllabusCache = Promise.all([gvizRows('Classes', 'A:D'), gvizRows('Slots', 'A:D')]).then(([classRows, slotRows]) => {
+      const classes = new Map<string, SyllabusClass>();
+      for (const [dance = '', title = '', covered = '', notes = ''] of classRows) {
+        if (!title || title.startsWith('#') || classes.has(title)) continue;
+        classes.set(title, { dance, title, notes, patterns: covered.split(',').map(cleanPattern).filter(Boolean) });
+      }
+      const slots = slotRows
+        .map(([label = '', title = '', archived = '', id = '']) => ({ id, label, title, archived: /^(yes|true|x)$/i.test(archived) }))
+        .filter(s => /^[A-Za-z0-9_-]{1,64}$/.test(s.id));
+      return { classes, slots };
+    });
+    syllabusCache.catch(() => { syllabusCache = null; });
+  }
+  return syllabusCache;
+};
+
+/** After the app saves a slot, show the saved values without waiting for a refetch. */
+export const patchSyllabusSlot = (slot: SheetSlot) => {
+  if (!syllabusCache) return;
+  syllabusCache = syllabusCache.then(s => {
+    const i = s.slots.findIndex(x => x.id === slot.id);
+    const slots = i >= 0 ? s.slots.map(x => (x.id === slot.id ? slot : x)) : [...s.slots, slot];
+    return { ...s, slots };
+  });
+};
+
+/** One home-screen card per active slot, in worksheet order. */
+export const syllabusClasses = (s: Syllabus): DanceClass[] =>
+  s.slots
+    .filter(slot => !slot.archived && slot.title)
+    .map(slot => {
+      const cls = s.classes.get(slot.title);
+      return {
+        id: `slot-${slot.id}`,
+        name: cleanPattern(slot.title),
+        when: slot.label,
+        content: cls && cls.patterns.length ? cls.patterns.join(', ') : 'Patterns TBD',
+        notes: cls?.notes ?? '',
+      };
+    });
