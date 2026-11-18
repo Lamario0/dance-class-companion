@@ -28,6 +28,32 @@ const alice = () => env.authenticatedContext('alice', { email_verified: true }).
 const guest = () => env.unauthenticatedContext().firestore();
 const newSlot = (over: Record<string, unknown> = {}) => ({ label: 'Thu 8:00pm', title: 'WCS 101', archived: false, createdAt: serverTimestamp(), ...over });
 
+test('guests (slice 2): only verified admins read, create (valid fields) and rename; nobody deletes', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'guests/wendy'), { name: 'Wendy', createdAt: Timestamp.now(), createdBy: 'boss' });
+    await setDoc(doc(ctx.firestore(), 'checkins/tue7__2026-11-17__g_wendy'), { guestId: 'wendy', name: 'Wendy', slotId: 'tue7', date: '2026-11-17' });
+  });
+  const newGuest = (over: Record<string, unknown> = {}) => ({ name: 'Sam', createdAt: serverTimestamp(), createdBy: 'boss', ...over });
+  await assertSucceeds(addDoc(collection(admin(), 'guests'), newGuest()));
+  await assertFails(addDoc(collection(admin(), 'guests'), newGuest({ name: '  ' })));
+  await assertFails(addDoc(collection(admin(), 'guests'), newGuest({ name: 'x'.repeat(61) })));
+  await assertFails(addDoc(collection(admin(), 'guests'), newGuest({ createdBy: 'someone-else' })));
+  await assertFails(addDoc(collection(admin(), 'guests'), newGuest({ extra: 1 })));
+  await assertFails(addDoc(collection(alice(), 'guests'), newGuest({ createdBy: 'alice' })));
+  await assertFails(addDoc(collection(unverifiedAdmin(), 'guests'), newGuest({ createdBy: 'eve' })));
+  await assertSucceeds(getDocs(collection(admin(), 'guests')));
+  await assertFails(getDocs(collection(alice(), 'guests')));
+  await assertFails(getDoc(doc(guest(), 'guests/wendy')));
+  await assertSucceeds(updateDoc(doc(admin(), 'guests/wendy'), { name: 'Wendy K.' }));
+  await assertFails(updateDoc(doc(admin(), 'guests/wendy'), { createdBy: 'x' }));
+  await assertFails(updateDoc(doc(alice(), 'guests/wendy'), { name: 'Hacked' }));
+  await assertFails(deleteDoc(doc(admin(), 'guests/wendy')));
+  // Guest check-ins (no uid): admins read them by date; students can't.
+  await assertSucceeds(getDocs(query(collection(admin(), 'checkins'), where('date', '==', '2026-11-17'))));
+  await assertFails(getDoc(doc(alice(), 'checkins/tue7__2026-11-17__g_wendy')));
+  await assertSucceeds(getDocs(query(collection(alice(), 'checkins'), where('uid', '==', 'alice'))));
+});
+
 test('anyone can read a slot (QR landing screen)', async () => {
   await assertSucceeds(getDoc(doc(guest(), 'slots/tue7')));
 });

@@ -8,3 +8,16 @@ export const studioDate = (at: Date = new Date()) =>
 
 /** Check-in document id: one per slot, studio day and person. */
 export const checkinId = (slotId: string, date: string, uid: string) => `${slotId}__${date}__${uid}`;
+
+/** Check-in id for a guest (no account): the person part is `g_<guestId>`. */
+export const guestCheckinId = (slotId: string, date: string, guestId: string) => checkinId(slotId, date, `g_${guestId}`);
+
+/** True for a real calendar date written YYYY-MM-DD. */
+export const isIsoDate = (d: unknown): d is string => {
+  if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  const t = new Date(`${d}T12:00:00Z`);
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+};
+
+export const SLOT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+export const CHECKIN_ID = /^[A-Za-z0-9_-]{1,64}__\d{4}-\d{2}-\d{2}__[A-Za-z0-9_-]{1,140}$/;
