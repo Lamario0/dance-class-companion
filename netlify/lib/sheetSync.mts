@@ -21,10 +21,11 @@ export interface SlotValues {
 export const MAX_SLOT_TEXT = 60;
 export const isSlotText = (t: unknown): t is string => typeof t === 'string' && t.trim().length > 0 && t.length <= MAX_SLOT_TEXT;
 
-/** Sheet text typed by the app must never turn into a formula. */
+/** Text in a USER_ENTERED write (Classes) must never turn into a formula. */
 const plain = (s: string) => (/^[=+\-@]/.test(s) ? `'${s}` : s);
 
-const slotRow = (id: string, s: SlotValues) => [plain(s.label), plain(s.title), s.archived ? 'yes' : '', id];
+// Slots rows are written RAW: "7:00 PM" stays text, "=..." never becomes a formula.
+const slotRow = (id: string, s: SlotValues) => [s.label, s.title, s.archived ? 'yes' : '', id];
 
 interface SheetSlot extends SlotValues {
   id: string;
@@ -42,12 +43,16 @@ export const readSlotRows = async (api: SheetsApi): Promise<SheetSlot[]> =>
     }))
     .filter(r => r.id);
 
-/** Create or update a slot's row in Slots. */
-export const writeSlotRow = async (api: SheetsApi, id: string, s: SlotValues, rows?: SheetSlot[]) => {
-  const existing = (rows ?? (await readSlotRows(api))).find(r => r.id === id);
-  if (existing) await api.update(`Slots!A${existing.row}:D${existing.row}`, [slotRow(id, s)]);
-  else await api.append('Slots!A:D', [slotRow(id, s)]);
+/** Create or update a slot's row in Slots (re-read right before writing, so row numbers are current). */
+export const writeSlotRow = async (api: SheetsApi, id: string, s: SlotValues) => {
+  // With repeated ids, the first row is the one that counts (same everywhere).
+  const existing = (await readSlotRows(api)).find(r => r.id === id);
+  if (existing) await api.update(`Slots!A${existing.row}:D${existing.row}`, [slotRow(id, s)], true);
+  else await api.append('Slots!A:D', [slotRow(id, s)], true);
 };
+
+/** The slot's row as the sheet has it (first row with that id), or null. */
+export const findSlotRow = async (api: SheetsApi, id: string) => (await readSlotRows(api)).find(r => r.id === id) ?? null;
 
 /**
  * The slot's label and class as the sheet has them, for a check-in. Null when the
@@ -67,7 +72,8 @@ export const sheetSlot = async (api: SheetsApi | null, id: string): Promise<{ la
 /** Two-way slot sync: push pending/missing rows, pull sheet edits (sheet wins). */
 export const syncSlots = async (api: SheetsApi, db: Firestore) => {
   const rows = await readSlotRows(api);
-  const byId = new Map(rows.map(r => [r.id, r]));
+  const byId = new Map<string, SheetSlot>();
+  for (const r of rows) if (!byId.has(r.id)) byId.set(r.id, r); // first row wins
   const snaps = (await db.collection('slots').get()).docs;
   let pushed = 0;
   let pulled = 0;
@@ -77,8 +83,7 @@ export const syncSlots = async (api: SheetsApi, db: Firestore) => {
     const app: SlotValues = { label: d.label, title: d.title, archived: d.archived === true };
     const row = byId.get(snap.id);
     if (d.sheetPending === true || !row) {
-      await writeSlotRow(api, snap.id, app, rows);
-      if (!row) rows.push({ id: snap.id, ...app, row: Math.max(1, ...rows.map(r => r.row)) + 1 });
+      await writeSlotRow(api, snap.id, app);
       // Only clears the flag if nobody edited the slot meanwhile.
       if (d.sheetPending === true) await snap.ref.update({ sheetPending: false }, { lastUpdateTime: snap.updateTime }).catch(() => {});
       pushed++;
@@ -92,7 +97,7 @@ export const syncSlots = async (api: SheetsApi, db: Firestore) => {
       if (ok) pulled++;
     }
     if (row.archived !== app.archived || label !== row.label || title !== row.title) {
-      await writeSlotRow(api, snap.id, { label, title, archived: app.archived }, rows);
+      await writeSlotRow(api, snap.id, { label, title, archived: app.archived });
     }
   }
   return { pushed, pulled };
@@ -100,13 +105,13 @@ export const syncSlots = async (api: SheetsApi, db: Firestore) => {
 
 // --- Classes -------------------------------------------------------------------
 
-/** The class columns of every dance worksheet: a column whose right-hand neighbour in row 1 is a checkbox. */
+/** The class columns of every dance worksheet: a titled row-1 cell whose right-hand neighbour is a checkbox. */
 export const classColumns = (meta: Awaited<ReturnType<SheetsApi['meta']>>) => {
   const out: { sheet: string; col: number }[] = [];
   for (const s of meta) {
     if (NOT_DANCE.includes(s.title.trim().toLowerCase())) continue;
     s.row1.forEach((cell, i) => {
-      if (!cell.checkbox && s.row1[i + 1]?.checkbox) out.push({ sheet: s.title, col: i });
+      if (!cell.checkbox && cell.text.trim() && s.row1[i + 1]?.checkbox) out.push({ sheet: s.title, col: i });
     });
   }
   return out;

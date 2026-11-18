@@ -22,6 +22,8 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Attendance: date `11-18-2026`, time `7:04 PM` (scan time; blank for admin-added), newest at the top; removal deletes the row; sheet down → sync later (15-minute job); backfill on first run.
 - Sharing the workbook with the service account as Editor is OK. Accepted: the link-viewable workbook exposes Attendance names to anyone with the link.
 - Built as two PRs: 3A (classes + slots), 3B (attendance rows).
+- Spec and its five defaults approved by the user (unique titles across the workbook, asterisks stripped in the app, cards in Slots order, class notes keyed by title, sheet-down shows today's error).
+- 3A build: slots are now saved through `/api/admin/slot` (server writes Firestore + the Slots row) instead of from the browser; the slots rules are unchanged, so no rules deploy. A `sheetPending` flag marks app edits the sheet hasn't seen; the job pushes those and otherwise pulls sheet edits (with an update-time precondition, so a newer app edit wins). Until the Slots worksheet has rows, the home screen keeps using the old "webapp data" class block.
 
 ## 2026-11-18 - Attendance slice 2 (admin tools)
 

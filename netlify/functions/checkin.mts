@@ -36,11 +36,11 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
     return json({ error: "This code isn't active.", code: 'inactive' }, 404);
   }
 
-  const fromSheet = await sheetSlot(sheetsApi(), slotId);
+  // The sheet read runs alongside the profile read, so it adds as little wait as possible.
+  const [fromSheet, profileSnap] = await Promise.all([sheetSlot(sheetsApi(), slotId), db.doc(`users/${user.uid}`).get()]);
   const label = fromSheet?.label ?? (slot.label as string);
   const title = fromSheet?.title ?? (slot.title as string);
-
-  const profile = (await db.doc(`users/${user.uid}`).get()).data();
+  const profile = profileSnap.data();
   const name = (profile?.displayName as string) || user.name || user.email?.split('@')[0] || 'Dancer';
   const date = studioDate();
   const ref = db.doc(`checkins/${checkinId(slotId, date, user.uid)}`);

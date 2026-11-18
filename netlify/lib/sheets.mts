@@ -21,10 +21,10 @@ export interface SheetMeta {
 export interface SheetsApi {
   /** Values of a range; `formulas` returns formulas instead of computed values. */
   get(range: string, formulas?: boolean): Promise<string[][]>;
-  /** Overwrite a range (values as typed, so formulas work). */
-  update(range: string, rows: (string | boolean)[][]): Promise<void>;
+  /** Overwrite a range. `asText`: stored exactly as given (RAW); otherwise as typed, so formulas work. */
+  update(range: string, rows: (string | boolean)[][], asText?: boolean): Promise<void>;
   /** Add rows after the last row of the worksheet holding `range`. */
-  append(range: string, rows: (string | boolean)[][]): Promise<void>;
+  append(range: string, rows: (string | boolean)[][], asText?: boolean): Promise<void>;
   /** Every worksheet's title and row 1. */
   meta(): Promise<SheetMeta[]>;
 }
@@ -94,14 +94,14 @@ const googleApi = (sa: { client_email: string; private_key: string }): SheetsApi
       const r = await call(`/values/${enc(range)}?valueRenderOption=${formulas ? 'FORMULA' : 'FORMATTED_VALUE'}`);
       return ((r.values ?? []) as unknown[][]).map(row => row.map(v => String(v ?? '')));
     },
-    async update(range, rows) {
-      await call(`/values/${enc(range)}?valueInputOption=USER_ENTERED`, {
+    async update(range, rows, asText = false) {
+      await call(`/values/${enc(range)}?valueInputOption=${asText ? 'RAW' : 'USER_ENTERED'}`, {
         method: 'PUT',
         body: JSON.stringify({ values: rows }),
       });
     },
-    async append(range, rows) {
-      await call(`/values/${enc(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+    async append(range, rows, asText = false) {
+      await call(`/values/${enc(range)}:append?valueInputOption=${asText ? 'RAW' : 'USER_ENTERED'}&insertDataOption=INSERT_ROWS`, {
         method: 'POST',
         body: JSON.stringify({ values: rows }),
       });

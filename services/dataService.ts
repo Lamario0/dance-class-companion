@@ -18,7 +18,8 @@ const DEFAULT_DATA: AppData = {
 
 export const fetchSheetData = async (): Promise<AppData> => {
   // Slice 3A: class cards come from the Slots + Classes worksheets (in parallel).
-  const syllabus = loadSyllabus(true).then(syllabusClasses, () => null);
+  // null = couldn't read; `empty` = Slots has no rows yet (keep the old block until then).
+  const syllabus = loadSyllabus(true).then(s => ({ cards: syllabusClasses(s), empty: s.slots.length === 0 }), () => null);
   try {
     const response = await fetch(DATA_URL);
     if (!response.ok) throw new Error(`Failed to fetch sheet: ${response.statusText}`);
@@ -207,11 +208,15 @@ export const fetchSheetData = async (): Promise<AppData> => {
     }
 
     // The old class block (rows 2-5) is only used until the Slots worksheet has rows.
-    const fromSyllabus = await syllabus;
-    return { classes: fromSyllabus && fromSyllabus.length ? fromSyllabus : classes, videos, songs, announcements };
+    // If Slots/Classes can't be read: no cards (the page's empty state) rather than stale ones.
+    const s = await syllabus;
+    return { classes: !s ? [] : s.empty ? classes : s.cards, videos, songs, announcements };
 
   } catch (error) {
     console.error("Fetch Data Error:", error);
+    // Keep the class cards if only "webapp data" failed.
+    const s = await syllabus;
+    if (s && !s.empty) return { ...DEFAULT_DATA, classes: s.cards };
     return DEFAULT_DATA;
   }
 };
@@ -293,7 +298,7 @@ export const syllabusClasses = (s: Syllabus): DanceClass[] =>
       const cls = s.classes.get(slot.title);
       return {
         id: `slot-${slot.id}`,
-        name: slot.title,
+        name: cleanPattern(slot.title),
         when: slot.label,
         content: cls && cls.patterns.length ? cls.patterns.join(', ') : 'Patterns TBD',
         notes: cls?.notes ?? '',

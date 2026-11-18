@@ -24,6 +24,7 @@ class FakeBook implements SheetsApi {
   row1 = new Map<string, { text: string; checkbox: boolean }[]>();
   failing = false;
   writes = 0;
+  rawWrites = 0;
   grid(name: string) {
     if (!this.grids.has(name)) this.grids.set(name, []);
     return this.grids.get(name)!;
@@ -46,9 +47,10 @@ class FakeBook implements SheetsApi {
     }
     return out;
   }
-  async update(range: string, rows: (string | boolean)[][]) {
+  async update(range: string, rows: (string | boolean)[][], asText = false) {
     this.check();
     this.writes++;
+    if (asText) this.rawWrites++;
     const { sheet, c0, r0 } = this.parse(range);
     const g = this.grid(sheet);
     rows.forEach((row, i) => {
@@ -56,9 +58,10 @@ class FakeBook implements SheetsApi {
       row.forEach((v, j) => (g[r0 + i][c0 + j] = String(v)));
     });
   }
-  async append(range: string, rows: (string | boolean)[][]) {
+  async append(range: string, rows: (string | boolean)[][], asText = false) {
     this.check();
     this.writes++;
+    if (asText) this.rawWrites++;
     const { sheet } = this.parse(range);
     const g = this.grid(sheet);
     let last = g.length;
@@ -137,9 +140,10 @@ test('creating and editing a slot writes its Slots row; only admins; text checke
   assert.deepEqual(book.slotRow(id), ['Tue 7:00pm', 'Basics 101-B', 'yes', id]);
   assert.equal(book.grid('Slots').length, rowsBefore, 'edits update the row, never add one');
 
-  // A label that looks like a formula is written as text.
+  // Slots rows are written as plain text (RAW), never as formulas or dates.
   const f = await call(saveSlot, boss.token, { label: '=1+1', title: 'Basics 101-A' });
-  assert.equal(book.slotRow(f.body.slot.id)![0], "'=1+1");
+  assert.equal(book.slotRow(f.body.slot.id)![0], '=1+1');
+  assert.ok(book.rawWrites > 0);
 });
 
 test('sheet down: the slot still saves, and the job writes it later (no duplicate row)', async () => {
@@ -184,6 +188,20 @@ test('edits made in the Slots worksheet win; Archived stays the app\'s', async (
   assert.equal(d.archived, false);
   assert.deepEqual(book.slotRow(id), ['Thu 7:30pm', 'Intermediate 201-D', '', id]);
 
+  // Archiving in the app right after a sheet edit keeps the sheet edit.
+  book.slotRow(id)![1] = 'Intermediate 201-E';
+  const arch = await call(saveSlot, boss.token, { id, archived: true });
+  assert.equal(arch.body.slot.title, 'Intermediate 201-E');
+  assert.deepEqual(book.slotRow(id), ['Thu 7:30pm', 'Intermediate 201-E', 'yes', id]);
+  await call(saveSlot, boss.token, { id, archived: false });
+  book.slotRow(id)![1] = 'Intermediate 201-D';
+
+  // A repeated id: the first row counts.
+  book.grid('Slots').push(['Other', 'Ignored', '', id]);
+  await syncSheet(book, adminDb());
+  assert.equal((await adminDb().doc(`slots/${id}`).get()).data()!.title, 'Intermediate 201-D');
+  book.grid('Slots').pop();
+
   // A blank cell in the sheet doesn't blank the slot.
   book.slotRow(id)![1] = '';
   await syncSheet(book, adminDb());
@@ -222,6 +240,7 @@ test('Classes refresh adds a row per new class column, once, and leaves existing
     { text: 'Basics 101-B', checkbox: false }, { text: 'FALSE', checkbox: true },
     { text: '', checkbox: false },
     { text: 'Intermediate Prep 200', checkbox: false }, { text: 'FALSE', checkbox: true },
+    { text: '', checkbox: false }, { text: 'FALSE', checkbox: true }, // untitled: no row
   ]);
   book.row1.set('Carolina Shag', [{ text: 'Shag 101', checkbox: false }, { text: 'FALSE', checkbox: true }]);
   book.row1.set('Salsa', [{ text: 'AB', checkbox: false }, { text: '101', checkbox: false }]); // not converted yet

@@ -7,7 +7,7 @@ import { adminConfigured, adminDb, json, requireAdmin } from '../lib/firebaseAdm
 import { withAppCors } from '../lib/cors.mts';
 import { SLOT_ID } from '../lib/studio.mts';
 import { sheetsApi, withTimeout } from '../lib/sheets.mts';
-import { isSlotText, writeSlotRow } from '../lib/sheetSync.mts';
+import { findSlotRow, isSlotText, writeSlotRow } from '../lib/sheetSync.mts';
 
 export default withAppCors(async (req: Request, _context?: unknown) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -27,6 +27,7 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   if (bad(label) || bad(title)) return json({ error: 'Day/time and class must be 1-60 characters.' }, 400);
   if (archived !== undefined && typeof archived !== 'boolean') return json({ error: 'Invalid request body.' }, 400);
 
+  const api = sheetsApi();
   let ref;
   if (id === undefined) {
     if (label === undefined || title === undefined) return json({ error: 'Day/time and class are both needed.' }, 400);
@@ -37,6 +38,13 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
     ref = db.doc(`slots/${id}`);
     if (!(await ref.get()).exists) return json({ error: "That slot doesn't exist." }, 404);
     const patch: Record<string, unknown> = { sheetPending: true };
+    // A field this edit doesn't change keeps what the sheet says (the sheet wins), so
+    // archiving right after a sheet edit doesn't undo that edit.
+    if (api && (label === undefined || title === undefined)) {
+      const row = await withTimeout(findSlotRow(api, id), 2500).catch(() => null);
+      if (row && label === undefined && isSlotText(row.label)) patch.label = row.label;
+      if (row && title === undefined && isSlotText(row.title)) patch.title = row.title;
+    }
     if (label !== undefined) patch.label = label.trim();
     if (title !== undefined) patch.title = title.trim();
     if (archived !== undefined) patch.archived = archived;
@@ -47,7 +55,6 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   const snap = await ref.get();
   const d = snap.data()!;
   const slot = { id: ref.id, label: d.label as string, title: d.title as string, archived: d.archived === true };
-  const api = sheetsApi();
   let synced = false;
   if (api) {
     try {
