@@ -13,6 +13,16 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Main bundle limit raised from 320 to 330 kB.
 - Guardrails added: ask before editing the calculator files and before `firebase deploy`.
 
+## 2026-11-18 - Attendance slice 3 (syllabus-driven classes, sheet sync)
+
+- Scope grew: class content now comes from the syllabus itself. New worksheets in the Syllabus workbook: **Classes** (one row per class column of every dance worksheet; live formulas; Notes typed by hand), **Slots** (Slot, Class, Archived, Slot ID; Class is a dropdown of Classes titles), **Attendance** (Date, Time, Slot, Class, Name, How, Guest, Check-in ID). Set up by Claude through the Sheets connector on 2026-11-18.
+- Dance worksheets follow the WCS layout: row-1 titles with a checkbox column to the right, patterns above a green "Technique"/"Basic Patterns or Technique" row, the instructor's private technique/notes area below, grey columns between levels. Only ticked patterns above the green row reach the app. The other dances will be converted by the user and are skipped until then.
+- The app shows one class card per active slot (its class's title, ticked patterns and Notes). The "webapp data" class block is retired; songs, videos and announcements stay there.
+- Slots: only created in the app; label and class editable in the sheet and read back on each load and at check-in; the sheet wins when a row exists.
+- Attendance: date `11-18-2026`, time `7:04 PM` (scan time; blank for admin-added), newest at the top; removal deletes the row; sheet down → sync later (15-minute job); backfill on first run.
+- Sharing the workbook with the service account as Editor is OK. Accepted: the link-viewable workbook exposes Attendance names to anyone with the link.
+- Built as two PRs: 3A (classes + slots), 3B (attendance rows).
+
 ## 2026-11-18 - Attendance slice 2 (admin tools)
 
 - Approved: guests are a saved list (`guests/{id}`, admins only, renamed never deleted); admins check people in for today or past days, never future; any check-in (QR or manual) can be removed (hard delete); a new Admin > Attendance page holds headcounts and who came.
