@@ -6,7 +6,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CalendarCheck, LogIn, MailCheck, RotateCw } from 'lucide-react';
 import { useAccount } from '../auth/AuthProvider';
 import { DancingDots, EmptyState, SparkleDoodle, FootprintsDoodle } from '../ui/Doodles';
-import { getSlot, type Slot } from '../../services/attendanceService';
+import { getSlot, withSheet, type Slot } from '../../services/attendanceService';
+import { loadSyllabus } from '../../services/dataService';
 
 type Result =
   | { kind: 'checked-in' | 'already'; title: string; label: string }
@@ -32,7 +33,9 @@ export const CheckInView: React.FC<{
     if (!slotId) { setSlot(null); return; }
     let live = true;
     setSlot('loading');
-    getSlot(slotId).then(s => live && setSlot(s), () => live && setSlot('error'));
+    // The Slots worksheet's day/time and class win when it has them (slice 3A); never wait long for the sheet.
+    const sheet = Promise.race([loadSyllabus(), new Promise<null>(r => setTimeout(() => r(null), 2500))]).catch(() => null);
+    getSlot(slotId).then(async s => { const sy = await sheet; if (live) setSlot(s && withSheet(s, sy)); }, () => live && setSlot('error'));
     return () => { live = false; };
   }, [slotId, attempt]);
 

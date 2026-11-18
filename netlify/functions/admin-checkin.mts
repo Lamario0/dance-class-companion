@@ -6,6 +6,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminAuth, adminConfigured, adminDb, json, requireAdmin } from '../lib/firebaseAdmin.mts';
 import { withAppCors } from '../lib/cors.mts';
 import { checkinId, guestCheckinId, isIsoDate, studioDate, SLOT_ID } from '../lib/studio.mts';
+import { sheetsApi } from '../lib/sheets.mts';
+import { sheetSlot } from '../lib/sheetSync.mts';
 
 const GUEST_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const OLDEST = '2020-01-01';
@@ -58,8 +60,10 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   const sameDay = await db.collection('checkins').where('slotId', '==', slotId).where('date', '==', date).get();
   const atMs = (d: FirebaseFirestore.QueryDocumentSnapshot) => d.data().at?.toMillis?.() ?? Infinity;
   const recorded = [...sameDay.docs].sort((a, b) => atMs(a) - atMs(b) || a.id.localeCompare(b.id))[0]?.data();
-  const title = typeof recorded?.title === 'string' ? recorded.title : (slot.title as string);
-  const slotLabel = typeof recorded?.slotLabel === 'string' ? recorded.slotLabel : (slot.label as string);
+  // (No check-in yet that day: the Slots worksheet's values when it has a row, slice 3A.)
+  const current = recorded ? null : await sheetSlot(sheetsApi(), slotId);
+  const title = typeof recorded?.title === 'string' ? recorded.title : (current?.title ?? (slot.title as string));
+  const slotLabel = typeof recorded?.slotLabel === 'string' ? recorded.slotLabel : (current?.label ?? (slot.label as string));
 
   const id = forAccount ? checkinId(slotId, date, uid) : guestCheckinId(slotId, date, guestId);
   try {

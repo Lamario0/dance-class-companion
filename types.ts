@@ -2,6 +2,8 @@
 export interface DanceClass {
   id: string;
   name: string;
+  /** the slot's day/time (slice 3A), e.g. "Tue 7:00pm" */
+  when?: string;
   content: string;
   notes: string;
 }

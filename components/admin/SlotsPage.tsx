@@ -2,13 +2,20 @@
 // ("Tue 7:00pm") with the class currently taught in it ("WCS 201"). Its QR
 // encodes a permanent /checkin/<slotId> link, so editing the title never
 // changes the printed code. Slots are archived, never deleted.
+// Slice 3A: saves go through /api/admin/slot, which also writes the Slots
+// worksheet; the class is picked from the Classes worksheet; what the sheet says
+// is shown (it wins).
 import React, { useEffect, useState } from 'react';
-import { Archive, ArchiveRestore, Download, Pencil, Plus, Printer, QrCode, RotateCw, ShieldCheck } from 'lucide-react';
+import { Archive, ArchiveRestore, Download, Pencil, Plus, Printer, QrCode, RefreshCw, RotateCw, ShieldCheck } from 'lucide-react';
 import { useAccount } from '../auth/AuthProvider';
 import { useToast } from '../ui/Toast';
 import { BottomSheet } from '../ui/BottomSheet';
 import { DancingDots, EmptyState } from '../ui/Doodles';
-import { checkinLink, createSlot, subscribeSlots, updateSlot, MAX_SLOT_TEXT, type Slot } from '../../services/attendanceService';
+import { checkinLink, createSlot, subscribeSlots, updateSlot, withSheet, MAX_SLOT_TEXT, type Slot } from '../../services/attendanceService';
+import { authedFetch } from '../../services/authService';
+import { useSyllabus } from '../../services/useSyllabus';
+
+const SHEET_LATER = 'The Google Sheet will catch up within 15 minutes.';
 
 /** PNG data URL of a slot's QR (library loaded on first use). */
 const qrDataUrl = async (text: string) => {
@@ -55,8 +62,9 @@ const SlotCard: React.FC<{ slot: Slot; onEdit: () => void }> = ({ slot, onEdit }
   const setArchived = async (archived: boolean) => {
     setBusy(true);
     try {
-      await updateSlot(slot.id, { archived });
-      toast.show(archived ? 'Slot archived. Its QR no longer checks anyone in.' : 'Slot restored.', 'success');
+      const { synced } = await updateSlot(slot.id, { archived });
+      const msg = archived ? 'Slot archived. Its QR no longer checks anyone in.' : 'Slot restored.';
+      toast.show(synced ? msg : `${msg} ${SHEET_LATER}`, 'success');
     } catch (e) {
       console.error(e);
       toast.show("Couldn't save. Try again.", 'error');
@@ -134,6 +142,12 @@ export const SlotsPage: React.FC = () => {
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [sheetVersion, setSheetVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const syllabus = useSyllabus(sheetVersion);
+  // Class titles from the Classes worksheet, grouped by dance.
+  const byDance = new Map<string, string[]>();
+  for (const c of syllabus?.classes.values() ?? []) byDance.set(c.dance || 'Other', [...(byDance.get(c.dance || 'Other') ?? []), c.title]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -157,9 +171,9 @@ export const SlotsPage: React.FC = () => {
     if (!valid || !editing) return;
     setSaving(true);
     try {
-      if (editing === 'new') await createSlot(label, title);
-      else await updateSlot(editing.id, { label, title });
-      toast.show(editing === 'new' ? 'Slot created.' : 'Saved. The QR stays the same.', 'success');
+      const { synced } = editing === 'new' ? await createSlot(label, title) : await updateSlot(editing.id, { label, title });
+      const msg = editing === 'new' ? 'Slot created.' : 'Saved. The QR stays the same.';
+      toast.show(synced ? msg : `${msg} ${SHEET_LATER}`, 'success');
       setEditing(null);
     } catch (err) {
       console.error(err);
@@ -169,8 +183,24 @@ export const SlotsPage: React.FC = () => {
     }
   };
 
-  const active = (slots ?? []).filter(s => !s.archived);
-  const archived = (slots ?? []).filter(s => s.archived);
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      const r: any = await authedFetch('/api/admin/sheet-sync', { method: 'POST' });
+      const added = r.classes?.added ?? 0;
+      toast.show(added ? `Added ${added} class${added === 1 ? '' : 'es'} to the Classes worksheet.` : 'The class list is up to date.', 'success');
+      setSheetVersion(v => v + 1);
+    } catch (err: any) {
+      console.error(err);
+      toast.show(err?.message || "Couldn't reach the Google Sheet. Try again.", 'error');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const shown = (slots ?? []).map(s => withSheet(s, syllabus));
+  const active = shown.filter(s => !s.archived);
+  const archived = shown.filter(s => s.archived);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -179,7 +209,12 @@ export const SlotsPage: React.FC = () => {
           <p className="eyebrow flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Admin</p>
           <h2 className="mt-1 text-[28px] font-extrabold leading-tight tracking-tight md:text-4xl">Class slots</h2>
         </div>
-        <button type="button" onClick={() => open('new')} className="btn-primary press min-h-11"><Plus className="h-4 w-4" /> New slot</button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={refresh} disabled={refreshing} className="btn-secondary press min-h-11">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh class list
+          </button>
+          <button type="button" onClick={() => open('new')} className="btn-primary press min-h-11"><Plus className="h-4 w-4" /> New slot</button>
+        </div>
       </div>
 
       {failed ? (
@@ -229,8 +264,20 @@ export const SlotsPage: React.FC = () => {
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="font-semibold">Class being taught</span>
-            <input value={title} onChange={e => setTitle(e.target.value)} maxLength={MAX_SLOT_TEXT} placeholder="WCS 201" className="input" />
-            <span className="text-[14px] text-text-lo">Change this whenever the class changes. The QR code stays the same.</span>
+            {byDance.size > 0 ? (
+              <select value={title} onChange={e => setTitle(e.target.value)} className="input">
+                <option value="" disabled>Pick a class</option>
+                {title && !syllabus?.classes.has(title) && <option value={title}>{title} (not in the Classes worksheet)</option>}
+                {[...byDance].map(([dance, titles]) => (
+                  <optgroup key={dance} label={dance}>
+                    {titles.map(t => <option key={t} value={t}>{t}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            ) : (
+              <input value={title} onChange={e => setTitle(e.target.value)} maxLength={MAX_SLOT_TEXT} placeholder="WCS 201" className="input" />
+            )}
+            <span className="text-[14px] text-text-lo">Change this whenever the class changes, here or in the Slots worksheet. The QR code stays the same.</span>
           </label>
           <button type="submit" disabled={!valid || saving} className="btn-primary press min-h-11">
             {saving ? <DancingDots label="Saving" dotClass="bg-white" /> : editing === 'new' ? 'Create slot' : 'Save'}

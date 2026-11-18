@@ -9,9 +9,10 @@ import { useToast } from '../ui/Toast';
 import { BottomSheet } from '../ui/BottomSheet';
 import { DancingDots, EmptyState } from '../ui/Doodles';
 import {
-  createGuest, dayLabel, firstOfDay, renameGuest, shiftDate, studioToday, subscribeCheckinsOn, subscribeGuests, subscribeSlots,
+  createGuest, dayLabel, firstOfDay, renameGuest, shiftDate, studioToday, subscribeCheckinsOn, subscribeGuests, subscribeSlots, withSheet,
   MAX_SLOT_TEXT, type DayCheckin, type Guest, type Slot,
 } from '../../services/attendanceService';
+import { useSyllabus } from '../../services/useSyllabus';
 
 interface Account { uid: string; name: string; email: string }
 type Person = { kind: 'account'; uid: string; name: string; sub: string } | { kind: 'guest'; id: string; name: string };
@@ -37,6 +38,7 @@ export const ClassAttendancePage: React.FC = () => {
   const today = useStudioToday();
   const [date, setDate] = useState(today);
   const [slots, setSlots] = useState<Slot[] | null>(null);
+  const syllabus = useSyllabus();
   const [rows, setRows] = useState<DayCheckin[] | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [failed, setFailed] = useState(false);
@@ -93,6 +95,7 @@ export const ClassAttendancePage: React.FC = () => {
     const known = new Set(slots.map(s => s.id));
     const list = slots
       .filter(s => !s.archived || bySlot.has(s.id))
+      .map(s => withSheet(s, syllabus))
       .map(s => ({ id: s.id, label: s.label, title: s.title, active: !s.archived, people: bySlot.get(s.id) ?? [] }));
     bySlot.forEach((people, id) => {
       if (!known.has(id)) list.push({ id, label: people[0].slotLabel, title: people[0].title, active: false, people });
@@ -107,7 +110,7 @@ export const ClassAttendancePage: React.FC = () => {
         people: [...g.people].sort((a, b) => nameOf(a).localeCompare(nameOf(b))),
       };
     });
-  }, [slots, rows, guestName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [slots, rows, guestName, syllabus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isAdmin) {
     return <div className="card mx-auto max-w-md"><EmptyState doodle="swirl" title="Admins only." body="This page is for studio admins." /></div>;

@@ -16,6 +16,8 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { authedFetch } from './authService';
+import { patchSyllabusSlot, type Syllabus } from './dataService';
 
 export const MAX_SLOT_TEXT = 60;
 
@@ -59,14 +61,27 @@ export const subscribeSlots = (onChange: (slots: Slot[]) => void, onError: (e: F
     onError,
   );
 
-export const createSlot = (label: string, title: string) =>
-  addDoc(collection(db, 'slots'), { label: label.trim(), title: title.trim(), archived: false, createdAt: serverTimestamp() });
+// Slice 3A: slots are saved through the server, which also writes the Slots worksheet.
+// Resolves to whether the sheet was updated now (false = the 15-minute job will).
+const saveSlot = async (body: Record<string, unknown>) => {
+  const r: { slot: Slot; synced: boolean } = await authedFetch('/api/admin/slot', { method: 'POST', body: JSON.stringify(body) });
+  patchSyllabusSlot(r.slot);
+  return r;
+};
+
+export const createSlot = (label: string, title: string) => saveSlot({ label: label.trim(), title: title.trim() });
 
 export const updateSlot = (id: string, patch: Partial<Pick<Slot, 'label' | 'title' | 'archived'>>) => {
-  const clean: Record<string, unknown> = { ...patch };
+  const clean: Record<string, unknown> = { id, ...patch };
   if (typeof patch.label === 'string') clean.label = patch.label.trim();
   if (typeof patch.title === 'string') clean.title = patch.title.trim();
-  return updateDoc(doc(db, 'slots', id), clean);
+  return saveSlot(clean);
+};
+
+/** The slot as the Slots worksheet has it (the sheet wins when it has a row). */
+export const withSheet = <T extends { id: string; label: string; title: string }>(slot: T, s: Syllabus | null): T => {
+  const row = s?.slots.find(x => x.id === slot.id);
+  return row ? { ...slot, label: row.label || slot.label, title: row.title || slot.title } : slot;
 };
 
 export const subscribeMyCheckins = (uid: string, onChange: (rows: Checkin[]) => void, onError: (e: FirestoreError) => void) =>
