@@ -41,6 +41,13 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
 
+# Android app links (slice 4): must be served as JSON, never cached for long.
+[[headers]]
+  for = "/.well-known/assetlinks.json"
+  [headers.values]
+    Content-Type = "application/json"
+    Cache-Control = "public, max-age=300"
+
 [[headers]]
   for = "/assets/*"
   [headers.values]

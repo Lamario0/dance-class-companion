@@ -13,6 +13,12 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Main bundle limit raised from 320 to 330 kB.
 - Guardrails added: ask before editing the calculator files and before `firebase deploy`.
 
+## 2026-11-18 - Slice 4 (Android app links + scanner) spec
+
+- Scope: app links (class QR codes open the app) and an in-app scanner, reached from the left menu only.
+- 1.2.0 (versionCode 11) is never uploaded; slice 4 ships as 1.3.0 (versionCode 12) to Play internal testing.
+- Slice 3 (3A + 3B) is live as of 2026-11-18 (PRs 12-15).
+
 ## 2026-11-18 - Attendance slice 3 (syllabus-driven classes, sheet sync)
 
 - Scope grew: class content now comes from the syllabus itself. New worksheets in the Syllabus workbook: **Classes** (one row per class column of every dance worksheet; live formulas; Notes typed by hand), **Slots** (Slot, Class, Archived, Slot ID; Class is a dropdown of Classes titles), **Attendance** (Date, Time, Slot, Class, Name, How, Guest, Check-in ID). Set up by Claude through the Sheets connector on 2026-11-18.

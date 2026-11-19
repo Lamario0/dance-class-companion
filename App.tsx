@@ -64,6 +64,7 @@ const LeaveMenuPageWhenNotAllowed: React.FC<{ tab: Tab; onLeave: () => void }> =
 };
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ToastProvider } from './components/ui/Toast';
+import { useAppLinks } from './services/appLinks';
 import { EmptyState, DancingDots } from './components/ui/Doodles';
 import { LogOut, RotateCw } from 'lucide-react';
 
@@ -104,6 +105,9 @@ const LoadingSkeleton: React.FC = () => (
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(CHECKIN_SLOT !== null ? Tab.CHECKIN : Tab.CLASSES);
+  // Which slot the check-in screen is for: from the address bar on the web, or (slice 4,
+  // Android app) from an app link or the in-app scanner. `n` remounts it for each scan.
+  const [checkin, setCheckin] = useState<{ slot: string | null; n: number }>({ slot: CHECKIN_SLOT || null, n: 0 });
   // Leaving the check-in screen drops /checkin/<id> from the address bar, so a reload doesn't check in again.
   useEffect(() => {
     if (activeTab !== Tab.CHECKIN && window.location.pathname.startsWith('/checkin/')) {
@@ -182,6 +186,21 @@ const App: React.FC = () => {
       window.scrollTo({ top: 0 });
     });
   };
+  // Slice 4 (Android app): a class link or an in-app scan opens that check-in.
+  // Unsaved notes ask first; if the student stays, nothing changes.
+  const openCheckin = (slot: string) => {
+    setMenuOpen(false);
+    const show = () => setCheckin(c => ({ slot, n: c.n + 1 }));
+    if (activeTab === Tab.CHECKIN) return show();
+    guardLeave(() => {
+      show();
+      setDirection('right');
+      setActiveTab(Tab.CHECKIN);
+      window.scrollTo({ top: 0 });
+    });
+  };
+  useAppLinks(openCheckin);
+
 
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -351,7 +370,8 @@ const App: React.FC = () => {
                   {activeTab === Tab.CLASS_ATTENDANCE && <ClassAttendancePage />}
                   {activeTab === Tab.CHECKIN && (
                     <CheckInView
-                      slotId={CHECKIN_SLOT || null}
+                      key={checkin.n}
+                      slotId={checkin.slot}
                       onOpenAccount={openAccount}
                       onCloseAccount={closeAccount}
                       onDone={() => navigateTo(Tab.CLASSES)}
@@ -448,6 +468,7 @@ const App: React.FC = () => {
         onSlots={() => { setMenuOpen(false); navigateTo(Tab.SLOTS); }}
         onAttendance={() => { setMenuOpen(false); navigateTo(Tab.ATTENDANCE); }}
         onClassAttendance={() => { setMenuOpen(false); navigateTo(Tab.CLASS_ATTENDANCE); }}
+        onScanned={openCheckin}
         // Focus the hamburger first, so the account sheet returns focus there (not to the gone drawer item).
         onAccount={() => { menuButtonRef.current?.focus(); setMenuOpen(false); setAccountOpen(true); }}
       />

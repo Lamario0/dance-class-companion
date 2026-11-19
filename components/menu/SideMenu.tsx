@@ -2,7 +2,9 @@
 // Account now; admins also get an Admin section (filled in by slice 4).
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, X, NotebookPen, UserRound, ShieldCheck, Users, QrCode, CalendarCheck, ClipboardList } from 'lucide-react';
+import { Menu, X, NotebookPen, UserRound, ShieldCheck, Users, QrCode, CalendarCheck, ClipboardList, ScanLine } from 'lucide-react';
+import { isNativeApp } from '../../services/platform';
+import { useToast } from '../ui/Toast';
 import { useAccount } from '../auth/AuthProvider';
 
 /** Hamburger button for the header; renders nothing when signed out. */
@@ -44,11 +46,27 @@ interface SideMenuProps {
   onAttendance: () => void;
   /** admins only: who came to each class */
   onClassAttendance: () => void;
+  /** Android app only (slice 4): a class QR was scanned in the app */
+  onScanned: (slotId: string) => void;
   /** the header button, so focus can return to it */
   returnFocusTo: React.RefObject<HTMLButtonElement>;
 }
 
-export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAccount, onStudents, onSlots, onAttendance, onClassAttendance, returnFocusTo }) => {
+export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAccount, onStudents, onSlots, onAttendance, onClassAttendance, onScanned, returnFocusTo }) => {
+  const toast = useToast();
+  // Slice 4: Google's code scanner; a class code goes to its check-in.
+  const scan = async () => {
+    onClose();
+    try {
+      const { scanClassCode } = await import('../../services/appLinks');
+      const r = await scanClassCode();
+      if (r.kind === 'slot') onScanned(r.slotId);
+      else if (r.kind === 'other') toast.show("That's not a class code. Scan the QR code posted for your class.", 'error');
+    } catch (err) {
+      console.error('scan', err);
+      toast.show("The scanner didn't open. If this is the first time, give it a minute to finish installing and try again.", 'error');
+    }
+  };
   const { user, displayName, isAdmin } = useAccount();
   const panelRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(open);
@@ -199,6 +217,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAc
 
         <nav aria-label="Your stuff" className="mt-5 flex-1 overflow-y-auto px-3">
           {item('My notes', <NotebookPen className="h-[18px] w-[18px]" />, onNotes)}
+          {isNativeApp() && item('Scan to check in', <ScanLine className="h-[18px] w-[18px]" />, scan)}
           {item('My attendance', <CalendarCheck className="h-[18px] w-[18px]" />, onAttendance)}
           {item('Account', <UserRound className="h-[18px] w-[18px]" />, onAccount)}
 
