@@ -25,6 +25,11 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Spec and its five defaults approved by the user (unique titles across the workbook, asterisks stripped in the app, cards in Slots order, class notes keyed by title, sheet-down shows today's error).
 - 3A build: slots are now saved through `/api/admin/slot` (server writes Firestore + the Slots row) instead of from the browser; the slots rules are unchanged, so no rules deploy. A `sheetPending` flag marks app edits the sheet hasn't seen; the job pushes those and otherwise pulls sheet edits (with an update-time precondition, so a newer app edit wins). Until the Slots worksheet has rows, the home screen keeps using the old "webapp data" class block.
 
+- 3A shipped (PR 12, merged 2026-11-18).
+- 3B build: Attendance writes take turns through a short Firestore lease (`sheetSync/attendanceLock`), so a scan inserting a row can't shift rows under an admin's removal or rename. Check-ins spend at most ~3 s on the sheet in all; otherwise the job writes the row.
+- Accepted (3B): a deleted account's check-ins drop `uid` and the name, but the Check-in ID (`slot__date__uid`, the document id and the sheet's ID column) still contains the old Firebase uid. Uids aren't secrets and the account no longer exists; re-keying documents was judged not worth it (same reasoning as chat's readable uids).
+- 3B answers: Attendance rows are written at check-in (sheet failure never blocks a check-in; the job catches up); rows are ordered by date, newest day first, including late and past-day rows; renaming a student or guest updates their name on all check-ins and rows; deleted accounts' check-ins stay, relabelled "Former student" with no account link (same as chat).
+
 ## 2026-11-18 - Attendance slice 2 (admin tools)
 
 - Approved: guests are a saved list (`guests/{id}`, admins only, renamed never deleted); admins check people in for today or past days, never future; any check-in (QR or manual) can be removed (hard delete); a new Admin > Attendance page holds headcounts and who came.

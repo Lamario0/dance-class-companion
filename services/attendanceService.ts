@@ -173,7 +173,13 @@ export const subscribeGuests = (onChange: (rows: Guest[]) => void, onError: (e: 
 export const createGuest = async (name: string, adminUid: string) =>
   (await addDoc(collection(db, 'guests'), { name: name.trim(), createdAt: serverTimestamp(), createdBy: adminUid })).id;
 
-export const renameGuest = (id: string, name: string) => updateDoc(doc(db, 'guests', id), { name: name.trim() });
+export const renameGuest = async (id: string, name: string) => {
+  await updateDoc(doc(db, 'guests', id), { name: name.trim() });
+  // Their check-ins and Attendance rows follow (slice 3B); the server reads the saved name.
+  await authedFetch('/api/admin/guest-rename', { method: 'POST', body: JSON.stringify({ guestId: id }) }).catch(err =>
+    console.warn('guest rename on check-ins', err),
+  );
+};
 
 /** The day's first check-in (earliest time; pending server times last; then id). Its title is "the title recorded that day". Same rule as /api/admin/checkin. */
 export const firstOfDay = <T extends { at: Date | null; id: string }>(rows: T[]): T | undefined =>

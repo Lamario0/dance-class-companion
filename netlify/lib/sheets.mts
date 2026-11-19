@@ -1,7 +1,7 @@
 // Google Sheets access for the server (attendance slice 3, docs/spec.md).
 // The Syllabus workbook is shared with the service account (FIREBASE_SERVICE_ACCOUNT)
-// as Editor. Only Slots and Classes are written here; "webapp data", the dance
-// worksheets and "Random Notes" are only read.
+// as Editor. Only Slots, Classes and Attendance are written here; "webapp data",
+// the dance worksheets and "Random Notes" are only read.
 //
 // Tests swap in an in-memory workbook with setSheetsApiForTests().
 import { createSign } from 'node:crypto';
@@ -13,26 +13,42 @@ export const NOT_DANCE = ['webapp data', 'random notes', 'classes', 'slots', 'at
 
 export interface SheetMeta {
   title: string;
+  sheetId: number;
   /** Row 1, one entry per column: the text and whether the cell is a checkbox. */
   row1: { text: string; checkbox: boolean }[];
 }
 
 /** The few Sheets calls the app needs. */
 export interface SheetsApi {
-  /** Values of a range; `formulas` returns formulas instead of computed values. */
-  get(range: string, formulas?: boolean): Promise<string[][]>;
+  /** Values of a range: as shown ('formatted'), formulas, or 'unformatted' (dates as serial numbers). */
+  get(range: string, mode?: 'formatted' | 'formula' | 'unformatted'): Promise<string[][]>;
   /** Overwrite a range. `asText`: stored exactly as given (RAW); otherwise as typed, so formulas work. */
   update(range: string, rows: (string | boolean)[][], asText?: boolean): Promise<void>;
   /** Add rows after the last row of the worksheet holding `range`. */
   append(range: string, rows: (string | boolean)[][], asText?: boolean): Promise<void>;
-  /** Every worksheet's title and row 1. */
+  /** Every worksheet's title, id and row 1. */
   meta(): Promise<SheetMeta[]>;
+  /** spreadsheets.batchUpdate: all the requests apply together, in order, or none do. */
+  batch(requests: object[]): Promise<void>;
 }
+
+// After a failed or slow sheet call, check-ins skip the sheet for a minute so a
+// sheet outage never makes every scan wait (the job catches up).
+let downUntil = 0;
+export const noteSheetDown = () => {
+  downUntil = Date.now() + 60_000;
+};
+export const sheetLooksDown = () => Date.now() < downUntil;
+/** Tests only. */
+export const resetSheetDown = () => {
+  downUntil = 0;
+};
 
 let testApi: SheetsApi | null | undefined;
 /** Tests only: use this workbook instead of Google (null = "not configured"). */
 export const setSheetsApiForTests = (api: SheetsApi | null | undefined) => {
   testApi = api;
+  downUntil = 0;
 };
 
 /** The workbook, or null when no credentials are set (local dev on the emulators). */
@@ -90,8 +106,9 @@ const googleApi = (sa: { client_email: string; private_key: string }): SheetsApi
   };
   const enc = encodeURIComponent;
   return {
-    async get(range, formulas = false) {
-      const r = await call(`/values/${enc(range)}?valueRenderOption=${formulas ? 'FORMULA' : 'FORMATTED_VALUE'}`);
+    async get(range, mode = 'formatted') {
+      const render = mode === 'formula' ? 'FORMULA' : mode === 'unformatted' ? 'UNFORMATTED_VALUE' : 'FORMATTED_VALUE';
+      const r = await call(`/values/${enc(range)}?valueRenderOption=${render}&dateTimeRenderOption=SERIAL_NUMBER`);
       return ((r.values ?? []) as unknown[][]).map(row => row.map(v => String(v ?? '')));
     },
     async update(range, rows, asText = false) {
@@ -107,15 +124,19 @@ const googleApi = (sa: { client_email: string; private_key: string }): SheetsApi
       });
     },
     async meta() {
-      const fields = 'sheets(properties(title),data(rowData(values(formattedValue,dataValidation(condition(type))))))';
+      const fields = 'sheets(properties(title,sheetId),data(rowData(values(formattedValue,dataValidation(condition(type))))))';
       const r = await call(`?includeGridData=true&ranges=${enc('1:1')}&fields=${enc(fields)}`);
       return (r.sheets ?? []).map((s: any) => ({
         title: s.properties.title as string,
+        sheetId: s.properties.sheetId as number,
         row1: ((s.data?.[0]?.rowData?.[0]?.values ?? []) as any[]).map(v => ({
           text: String(v.formattedValue ?? ''),
           checkbox: v.dataValidation?.condition?.type === 'BOOLEAN',
         })),
       }));
+    },
+    async batch(requests) {
+      if (requests.length) await call(':batchUpdate', { method: 'POST', body: JSON.stringify({ requests }) });
     },
   };
 };

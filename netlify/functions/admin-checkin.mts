@@ -6,8 +6,9 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminAuth, adminConfigured, adminDb, json, requireAdmin } from '../lib/firebaseAdmin.mts';
 import { withAppCors } from '../lib/cors.mts';
 import { checkinId, guestCheckinId, isIsoDate, studioDate, SLOT_ID } from '../lib/studio.mts';
-import { sheetsApi } from '../lib/sheets.mts';
+import { sheetLooksDown, sheetsApi } from '../lib/sheets.mts';
 import { sheetSlot } from '../lib/sheetSync.mts';
+import { writeNow } from '../lib/attendanceSheet.mts';
 
 const GUEST_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const OLDEST = '2020-01-01';
@@ -61,7 +62,9 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   const atMs = (d: FirebaseFirestore.QueryDocumentSnapshot) => d.data().at?.toMillis?.() ?? Infinity;
   const recorded = [...sameDay.docs].sort((a, b) => atMs(a) - atMs(b) || a.id.localeCompare(b.id))[0]?.data();
   // (No check-in yet that day: the Slots worksheet's values when it has a row, slice 3A.)
-  const current = recorded ? null : await sheetSlot(sheetsApi(), slotId);
+  const api = sheetLooksDown() ? null : sheetsApi();
+  const sheetBudgetEnds = Date.now() + 3000;
+  const current = recorded ? null : await sheetSlot(api, slotId);
   const title = typeof recorded?.title === 'string' ? recorded.title : (current?.title ?? (slot.title as string));
   const slotLabel = typeof recorded?.slotLabel === 'string' ? recorded.slotLabel : (current?.label ?? (slot.label as string));
 
@@ -77,12 +80,15 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
       at: FieldValue.serverTimestamp(),
       method: 'manual',
       addedBy: auth.caller.uid,
+      sheet: 'pending',
+      sheetAt: FieldValue.serverTimestamp(), // when its row write started (the job waits 90 s after)
     });
   } catch (err: any) {
     if (err?.code === 6 || /already exists/i.test(String(err?.message))) return json({ status: 'already', id, name });
     console.error('admin-checkin failed', err);
     return json({ error: "Couldn't check them in. Please try again." }, 500);
   }
+  await writeNow(sheetLooksDown() ? null : api, db, [id], Math.min(2500, sheetBudgetEnds - Date.now())); // its Attendance row (slice 3B)
   return json({ status: 'checked-in', id, name, title, label: slotLabel, date });
 });
 

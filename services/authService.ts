@@ -199,6 +199,9 @@ export const renameAccount = async (name: string) => {
   if (isReservedName(displayName)) throw reservedNameError();
   await updateDoc(profileRef(u.uid), { displayName });
   await updateProfile(u, { displayName });
+  // Their check-ins and Attendance rows follow too (slice 3B); the server reads the
+  // name from the profile. Best effort: the next rename or the admin can redo it.
+  authedFetch('/api/attendance-rename', { method: 'POST', body: '{}' }).catch(err => console.warn('attendance rename', err));
   // Their chat messages show the account name, so follow the rename (the rules check
   // it matches the profile). Written in batches; if any batch fails the caller is told,
   // since the account itself is already renamed.

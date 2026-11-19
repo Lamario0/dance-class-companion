@@ -9,8 +9,9 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminConfigured, adminDb, json, verifyUser } from '../lib/firebaseAdmin.mts';
 import { withAppCors } from '../lib/cors.mts';
 import { studioDate, checkinId } from '../lib/studio.mts';
-import { sheetsApi } from '../lib/sheets.mts';
+import { sheetLooksDown, sheetsApi } from '../lib/sheets.mts';
 import { sheetSlot } from '../lib/sheetSync.mts';
+import { writeNow } from '../lib/attendanceSheet.mts';
 
 export default withAppCors(async (req: Request, _context?: unknown) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -37,7 +38,10 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   }
 
   // The sheet read runs alongside the profile read, so it adds as little wait as possible.
-  const [fromSheet, profileSnap] = await Promise.all([sheetSlot(sheetsApi(), slotId), db.doc(`users/${user.uid}`).get()]);
+  // Skip the sheet for a minute after it failed, so an outage never slows every scan.
+  const api = sheetLooksDown() ? null : sheetsApi();
+  const sheetBudgetEnds = Date.now() + 3000; // all sheet work for this scan, so it answers within ~4 s
+  const [fromSheet, profileSnap] = await Promise.all([sheetSlot(api, slotId), db.doc(`users/${user.uid}`).get()]);
   const label = fromSheet?.label ?? (slot.label as string);
   const title = fromSheet?.title ?? (slot.title as string);
   const profile = profileSnap.data();
@@ -56,6 +60,8 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
       date,
       at: FieldValue.serverTimestamp(),
       method: 'qr',
+      sheet: 'pending',
+      sheetAt: FieldValue.serverTimestamp(), // when its row write started (the job waits 90 s after)
     });
   } catch (err: any) {
     // ALREADY_EXISTS (gRPC 6): checked in to this slot today already.
@@ -65,6 +71,8 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
     console.error('checkin failed', err);
     return json({ error: "Couldn't check you in. Please try again." }, 500);
   }
+  // Its Attendance row (slice 3B): now if the sheet answers quickly, else the job writes it.
+  await writeNow(sheetLooksDown() ? null : api, db, [ref.id], Math.min(2500, sheetBudgetEnds - Date.now()));
   return json({ status: 'checked-in', ...result });
 });
 

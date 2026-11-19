@@ -256,6 +256,9 @@ const gvizRows = async (sheet: string, range: string): Promise<string[][]> => {
   return (data.table.rows ?? []).map((r: any) => (r.c ?? []).map((c: any) => (c && c.v != null ? String(c.f ?? c.v).trim() : '')));
 };
 
+/** Split a pattern list on commas, except commas inside parentheses: "Load & Release (Whip, 2X Outside Turn)" is one. */
+export const splitPatterns = (s: string) => s.split(/,(?![^(]*\))/).map(p => p.trim()).filter(Boolean);
+
 /** "**Release Whip" -> "Release Whip": the sheet's asterisks are the instructor's own marks. */
 export const cleanPattern = (p: string) => p.replace(/^\*+|\*+$/g, '').trim();
 
@@ -268,7 +271,7 @@ export const loadSyllabus = (fresh = false): Promise<Syllabus> => {
       const classes = new Map<string, SyllabusClass>();
       for (const [dance = '', title = '', covered = '', notes = ''] of classRows) {
         if (!title || title.startsWith('#') || classes.has(title)) continue;
-        classes.set(title, { dance, title, notes, patterns: covered.split(',').map(cleanPattern).filter(Boolean) });
+        classes.set(title, { dance, title, notes, patterns: splitPatterns(covered).map(cleanPattern).filter(Boolean) });
       }
       const slots = slotRows
         .map(([label = '', title = '', archived = '', id = '']) => ({ id, label, title, archived: /^(yes|true|x)$/i.test(archived) }))

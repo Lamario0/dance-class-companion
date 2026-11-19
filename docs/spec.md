@@ -31,7 +31,7 @@ Only the current slice is specced. Later ones are specced when reached.
 |---|---|---|
 | 1 | Slots + QR check-in: admins create slots with printable QR codes; a signed-in student scans and is checked into the slot's current class (once per day); "My attendance" page | done (live 2026-11-18) |
 | 2 | Admin attendance tools: manual check-in (including people without an account, admin-added only), per-class headcount and who came | done (live 2026-11-18) |
-| 3 | Syllabus-driven classes and sheet sync: class cards come from a Classes worksheet built from the syllabus; slots in a Slots worksheet both ways (3A); every check-in becomes an Attendance row (3B) | specced below (awaiting approval) |
+| 3 | Syllabus-driven classes and sheet sync: class cards come from a Classes worksheet built from the syllabus; slots in a Slots worksheet both ways (3A); every check-in becomes an Attendance row (3B) | 3A done (live 2026-11-18); 3B specced below (awaiting approval) |
 | 4 | Android: scanning a QR opens the app (app links) and/or an in-app scanner | not specced |
 | 5 | Levels and progress: classes toward the next level, shown to students | not specced |
 
@@ -91,13 +91,17 @@ Hustle, NC2S, Salsa and Waltz will be converted to it by the user):
 - The app's slot editor picks the class from the Classes titles instead of
   free text.
 
-**3B - attendance rows**
-- Every check-in (QR or admin-added) becomes an Attendance row, newest at the
-  top. Time is the QR scan time, blank for admin-added. Guest says "yes" for
-  guests. Removing a check-in deletes its row.
+**3B - attendance rows** (specced 2026-11-18, see "3B detail" below)
+- Every check-in (QR or admin-added) becomes an Attendance row as it happens.
+  Rows read newest day first. Time is the QR scan time, blank for
+  admin-added. Guest says "yes" for guests. Removing a check-in deletes its
+  row.
+- Renaming a student profile or a guest updates their name on every
+  check-in and Attendance row. Deleting an account relabels its check-ins
+  and rows "Former student".
 - If the sheet can't be reached, the check-in still succeeds; the 15-minute
-  job writes waiting rows and deletions. Check-ins from before 3B are written
-  on the first run.
+  job writes waiting rows, deletions and renames. Check-ins from before 3B
+  are written on the first run.
 
 ### Confirmed decisions
 
@@ -154,15 +158,58 @@ Hustle, NC2S, Salsa and Waltz will be converted to it by the user):
 | 7 | Only server code with the service account writes the sheet; the browser never can | code review + function tests |
 | 8 | `npm run build` passes; main bundle under 330 kB | build output |
 
+### 3B detail
+
+**Confirmed (2026-11-18)**
+
+| Decision | Choice | Why |
+|---|---|---|
+| When rows appear | At check-in. The function waits up to ~3 s for the sheet; on failure or timeout the check-in still succeeds and the job writes the row | User choice |
+| Row order | By date, newest day first: a row goes above the first row with the same or an earlier date, so late rows (sheet was down, past-day adds, backfill) land in the right day | User choice |
+| Renames | A renamed student or guest shows the new name on all their check-ins (app and sheet) | User choice |
+| Deleted accounts | Their check-ins stay (headcounts stay right), relabelled "Former student" with no link to the account, in the app and the sheet, like chat | User choice |
+
+**How it works (Claude's design; say if any is wrong)**
+
+- Columns: Date (`11-18-2026`) | Time (`7:04 PM`, studio time, QR only) |
+  Slot (label recorded at check-in) | Class (title recorded at check-in) |
+  Name | How (`QR` / `Added`) | Guest (`yes` / blank) | Check-in ID.
+- Each check-in gets a `sheet` field: `synced` once its row is written,
+  `pending` until then. Removals the sheet hasn't seen yet are kept in a
+  server-only `sheetDeletes` list, so a removal is never lost. Renames the
+  sheet hasn't seen mark the check-ins `pending` again, and the job rewrites
+  those rows.
+- Rows are found by Check-in ID (never by row number alone), so sorting or
+  hand-editing other columns doesn't confuse the sync. A row typed by hand
+  without an ID is left alone. A row whose ID no longer exists in the app
+  is left alone too (hand edits aren't read back).
+- A student rename is reported by the app to a new server function, which
+  checks the caller and reads the new name from the profile itself, then
+  updates their check-ins. A guest rename goes through a new admin function
+  the same way. Running both on every rename keeps the 15-minute job from
+  having to scan all check-ins.
+- Account deletion (self or admin) relabels the check-ins in the same server
+  code that already relabels chat (`netlify/lib/accounts.mts`).
+- Rows are written as plain text except Date and Time, which are written as
+  real date/time values (so the sheet can sort and filter them); a name
+  starting with `=` never becomes a formula.
+- No Firestore rules change: check-ins stay server-only, and `sheetDeletes`
+  is covered by the "everything else locked" rule.
+
 ### Done means - 3B
 
 | # | Criterion | Checked by |
 |---|---|---|
-| 1 | A QR check-in and an admin-added check-in each add exactly one Attendance row at the top with the agreed columns and formats (Time blank for admin-added) | function test against a test spreadsheet + user looks at the real sheet |
-| 2 | Removing a check-in deletes its row, and only that row | function test + test spreadsheet |
-| 3 | With the sheet unreachable, check-ins still succeed; the next job run writes them and pending deletions, with no duplicate rows | function test (sheet calls failing, then working) |
-| 4 | The first run writes all earlier check-ins once; running it twice adds nothing | function test |
-| 5 | `npm run build` passes; main bundle under 330 kB | build output |
+| 1 | A QR check-in and an admin-added check-in each add exactly one Attendance row with the agreed columns and formats (Time blank for admin-added) | function test against the in-memory workbook + user looks at the real sheet after deploy |
+| 2 | Rows read newest day first: a past-day add and a late (synced afterwards) row land within their own day, above older days | function test |
+| 3 | Removing a check-in deletes its row and only that row, found by Check-in ID even after the sheet was sorted | function test |
+| 4 | With the sheet unreachable, check-ins and removals still succeed; the next job run writes the rows and deletions, with no duplicate rows | function test (sheet failing, then working) |
+| 5 | The first run writes all earlier check-ins once, each in its day; running it twice adds nothing | function test |
+| 6 | Renaming a student profile or a guest updates the name on all their check-ins and Attendance rows (now, or on the next job run if the sheet is down); only the student themself or an admin can trigger it, and the name always comes from the stored profile/guest | function test + browser (rename in the account sheet and on Admin > Attendance) |
+| 7 | Deleting an account (self or admin) relabels its check-ins and rows "Former student" and drops the account link; headcounts don't change | function test |
+| 8 | A QR check-in with the sheet down or slow still answers within ~4 s | function test (slow fake sheet) |
+| 9 | Only server code writes the Attendance worksheet; no other worksheet is written by 3B | code review + function tests |
+| 10 | `npm run build` passes; main bundle under 330 kB | build output |
 
 ### Reference to match
 
