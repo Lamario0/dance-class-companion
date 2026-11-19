@@ -187,10 +187,17 @@ const App: React.FC = () => {
     });
   };
   // Slice 4 (Android app): a class link or an in-app scan opens that check-in.
+  // Unsaved notes ask first; if the student stays, nothing changes.
   const openCheckin = (slot: string) => {
     setMenuOpen(false);
-    setCheckin(c => ({ slot, n: c.n + 1 }));
-    if (activeTab !== Tab.CHECKIN) navigateTo(Tab.CHECKIN);
+    const show = () => setCheckin(c => ({ slot, n: c.n + 1 }));
+    if (activeTab === Tab.CHECKIN) return show();
+    guardLeave(() => {
+      show();
+      setDirection('right');
+      setActiveTab(Tab.CHECKIN);
+      window.scrollTo({ top: 0 });
+    });
   };
   useAppLinks(openCheckin);
 

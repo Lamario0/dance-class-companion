@@ -52,7 +52,12 @@ export type ScanResult = { kind: 'slot'; slotId: string } | { kind: 'other' } | 
 export const scanClassCode = async (): Promise<ScanResult> => {
   const { BarcodeScanner, BarcodeFormat } = await import('@capacitor-mlkit/barcode-scanning');
   const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
-  if (!available) await BarcodeScanner.installGoogleBarcodeScannerModule();
+  if (!available) {
+    // Starts a download in the background; scan() works once it has finished.
+    await BarcodeScanner.installGoogleBarcodeScannerModule().catch(err => {
+      if (!/already installed/i.test(String(err?.message ?? err))) throw err;
+    });
+  }
   try {
     const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] });
     const text = barcodes[0]?.rawValue ?? '';

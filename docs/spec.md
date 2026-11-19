@@ -68,7 +68,8 @@ Only the current slice is specced. Later ones are specced when reached.
 2. **Verified links:** the site serves `/.well-known/assetlinks.json` naming
    the app (`com.danceclasscompanion.app`) and both signing keys (the upload
    key and Play's app-signing key), so Android opens the app without asking
-   "open with?".
+   "open with?". (Build note: Play's app-signing key is the same `dcc-release-key`
+   as the upload key, so the file lists one fingerprint, which matches both.)
 3. **Scanner:** Google's built-in code scanner (through Play services), so
    the app needs **no camera permission**. It is loaded only when used, so
    the website's bundle doesn't grow.
