@@ -93,8 +93,8 @@ test('a QR check-in and an admin-added guest each add exactly one row with the a
   const [row, ...extra] = rowOf(id);
   assert.equal(extra.length, 0);
   assert.equal(row[0], serial(today()));
-  assert.ok(Number(row[1]) >= 0 && Number(row[1]) < 1, 'QR time is a time of day');
-  assert.deepEqual(row.slice(2), ['Tue 7:00pm', 'Basics 101-A', 'ann name', 'QR', '', id]);
+  assert.ok(Number(row[4]) >= 0 && Number(row[4]) < 1, 'QR time is a time of day');
+  assert.deepEqual([...row.slice(1, 4), ...row.slice(5)], ['Tue 7:00pm', 'ann name', 'Basics 101-A', 'QR', '', id]);
   assert.equal((await adminDb().doc(`checkins/${id}`).get()).data()!.sheet, 'synced');
 
   // Scanning again the same day: no second row.
@@ -105,7 +105,7 @@ test('a QR check-in and an admin-added guest each add exactly one row with the a
   const g = await call(addCheckin, boss.token, { slotId: SLOT, date: today(), guestId: `g${stamp}` });
   assert.equal(g.body.status, 'checked-in');
   const gid = guestCheckinId(SLOT, today(), `g${stamp}`);
-  assert.deepEqual(rowOf(gid)[0].slice(1), ['', 'Tue 7:00pm', 'Basics 101-A', 'Gus', 'Added', 'yes', gid]);
+  assert.deepEqual(rowOf(gid)[0].slice(1), ['Tue 7:00pm', 'Gus', 'Basics 101-A', '', 'Added', 'yes', gid]);
 });
 
 test('rows read newest day first, including past-day adds', async () => {
@@ -122,13 +122,13 @@ test('rows read newest day first, including past-day adds', async () => {
 test('removing a check-in deletes its row only, even after the sheet was sorted by hand', async () => {
   const g = book.grid('Attendance');
   g.splice(1, g.length - 1, ...g.slice(1).reverse()); // someone sorted oldest first
-  g.push(['', '', '', '', 'Typed by hand', '', '', '']); // a row without an id
+  g.push(['', '', 'Typed by hand', '', '', '', '', '']); // a row without an id
   const before = book.attendance().length;
   const id = checkinId(SLOT, daysAgo(3), ben.uid);
   assert.equal((await call(removeCheckin, boss.token, { id })).body.status, 'removed');
   assert.equal(rowOf(id).length, 0);
   assert.equal(book.attendance().length, before - 1);
-  assert.ok(book.attendance().some(r => r[4] === 'Typed by hand'));
+  assert.ok(book.attendance().some(r => r[2] === 'Typed by hand'));
 });
 
 test('sheet down: check-ins and removals still succeed; the job catches up without duplicates', async () => {
@@ -190,13 +190,13 @@ test('renames: a student or a guest; the name comes from the saved record; sheet
   const r = await call(renameMe, ann.token, { name: 'Hacked' });
   assert.equal(r.status, 200);
   const id = checkinId(SLOT, today(), ann.uid);
-  assert.equal(rowOf(id)[0][4], 'Annie');
+  assert.equal(rowOf(id)[0][2], 'Annie');
   assert.equal((await adminDb().doc(`checkins/${id}`).get()).data()!.name, 'Annie');
 
   await adminDb().doc(`guests/g${stamp}`).update({ name: 'Gus K.' });
   assert.equal((await call(renameGuest, ann.token, { guestId: `g${stamp}` })).status, 403);
   assert.equal((await call(renameGuest, boss.token, { guestId: `g${stamp}` })).body.changed, 1);
-  assert.equal(rowOf(guestCheckinId(SLOT, today(), `g${stamp}`))[0][4], 'Gus K.');
+  assert.equal(rowOf(guestCheckinId(SLOT, today(), `g${stamp}`))[0][2], 'Gus K.');
 
   // Sheet down during a rename: the app has the new name now, the sheet after the job.
   await adminDb().doc(`users/${ann.uid}`).update({ displayName: 'Ann Lee' });
@@ -204,10 +204,10 @@ test('renames: a student or a guest; the name comes from the saved record; sheet
   await call(renameMe, ann.token);
   noOutage();
   assert.equal((await adminDb().doc(`checkins/${id}`).get()).data()!.name, 'Ann Lee');
-  assert.equal(rowOf(id)[0][4], 'Annie');
+  assert.equal(rowOf(id)[0][2], 'Annie');
   await backdate(id);
   await syncSheet(book, adminDb());
-  assert.equal(rowOf(id)[0][4], 'Ann Lee');
+  assert.equal(rowOf(id)[0][2], 'Ann Lee');
   assert.equal(rowOf(id).length, 1);
 });
 
@@ -222,7 +222,7 @@ test('a deleted account\'s check-ins stay as "Former student" with no account li
   assert.equal(d.uid, undefined);
   assert.equal((await adminDb().collection('checkins').where('slotId', '==', SLOT).get()).size, before, 'headcount unchanged');
   await syncSheet(book, adminDb());
-  assert.equal(rowOf(id)[0][4], 'Former student');
+  assert.equal(rowOf(id)[0][2], 'Former student');
 });
 
 test('a slow sheet never holds a QR check-in past ~4 s', async () => {

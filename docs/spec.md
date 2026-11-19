@@ -55,7 +55,7 @@ has three new worksheets:
   students see as the instructor notes. 30 WCS rows exist now.
 - **Slots** - Slot | Class | Archived | Slot ID. Class is a dropdown of the
   titles in Classes. Empty until 3A fills it from the app.
-- **Attendance** - Date | Time | Slot | Class | Name | How | Guest |
+- **Attendance** - Date | Slot | Name | Class | Time | How | Guest |
   Check-in ID. Date shows `11-18-2026`, Time `7:04 PM`. Empty until 3B.
 
 **Dance worksheet layout** (WCS is the model; Carolina Shag, C2S, Modern
@@ -171,9 +171,9 @@ Hustle, NC2S, Salsa and Waltz will be converted to it by the user):
 
 **How it works (Claude's design; say if any is wrong)**
 
-- Columns: Date (`11-18-2026`) | Time (`7:04 PM`, studio time, QR only) |
-  Slot (label recorded at check-in) | Class (title recorded at check-in) |
-  Name | How (`QR` / `Added`) | Guest (`yes` / blank) | Check-in ID.
+- Columns (reordered 2026-11-18): Date (`11-18-2026`) | Slot (label recorded at
+  check-in) | Name | Class (title recorded at check-in) | Time (`7:04 PM`,
+  studio time, QR only) | How (`QR` / `Added`) | Guest (`yes` / blank) | Check-in ID.
 - Each check-in gets a `sheet` field: `synced` once its row is written,
   `pending` until then. Removals the sheet hasn't seen yet are kept in a
   server-only `sheetDeletes` list, so a removal is never lost. Renames the

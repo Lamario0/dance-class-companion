@@ -99,7 +99,7 @@ export class FakeBook implements SheetsApi {
   slotRow(id: string) {
     return this.grid('Slots').find(r => r[3] === id);
   }
-  /** Attendance rows from row 2, as [date serial, time, slot, class, name, how, guest, id]. */
+  /** Attendance rows from row 2, as [date serial, slot, name, class, time, how, guest, id]. */
   attendance() {
     return this.grid('Attendance').slice(1).filter(r => r?.some(Boolean));
   }
