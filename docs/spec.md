@@ -33,7 +33,94 @@ Only the current slice is specced. Later ones are specced when reached.
 | 2 | Admin attendance tools: manual check-in (including people without an account, admin-added only), per-class headcount and who came | done (live 2026-11-18) |
 | 3 | Syllabus-driven classes and sheet sync: class cards come from a Classes worksheet built from the syllabus; slots in a Slots worksheet both ways (3A); every check-in becomes an Attendance row (3B) | done (live 2026-11-18) |
 | 4 | Android: scanning a class QR opens the app (app links), plus a "Scan to check in" scanner in the menu; ships as 1.3.0 | done (verified on phone 2026-11-18; 1.3.0 awaiting Play upload) |
-| 5 | Levels and progress: classes toward the next level, shown to students | not specced |
+| 5 | Levels and progress: per-dance levels (100 / 200 / Advanced Concepts), progress shown to students, admin confirms moves up, guests linkable to accounts | specced below (awaiting approval) |
+
+---
+
+## Slice 5 - Levels and progress
+
+### What it does
+
+- **Levels per dance:** each student has a level in each dance: 100
+  (Basics), 200 (Intermediate) or Advanced Concepts. Everyone starts at 100.
+- **Progress for students:** "My attendance" gets a progress card per dance
+  they have attended: classes counted toward the next level, time since
+  their first counted class, and what is unlocked. Example: "WCS - 100 level:
+  9 of 12 classes, 2 of 4 months".
+- **AB first:** if a dance has an AB class, it must be attended before that
+  dance's 101/102/... count; until then the card says "Start with AB".
+- **Ready -> admin confirms:** when a student meets a target, the admin sees
+  them in a "Ready to move up" list and confirms (or leaves them). Advanced
+  Concepts is invite only: meeting its minimum only makes them eligible; the
+  admin confirms the invite the same way.
+- **Show + warn, never block:** a check-in to a class above the student's
+  level still works, but is flagged ("above level") on the admin's class
+  attendance list.
+- **Guest linking:** an admin can link a guest (admin-added, no account) to a
+  student account; the guest's check-ins move to that account and count.
+
+### Rules (from the user)
+
+| Move | Requirement |
+|---|---|
+| 100 -> 200 | at least 12 classes at 100 level (after AB, if the dance has one) AND at least 4 months since the first of them, then admin confirms |
+| 200 -> Advanced Concepts | at least 6 months since the first 200-level class AND at least N 200-level classes (N set by the admin, default 24), then admin invites |
+
+### Confirmed decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Moving up | Counts make a student "ready"; an admin confirms | User choice |
+| Where targets live | The app's admin page (not the sheet) | User choice |
+| Counting | 100-level classes toward 200; 200-level toward ADV; AB required first where it exists | User's rules |
+| Locked classes | Show + warn; check-in never refused | User choice |
+| Time | Minimum classes plus months since the first counted class | User choice |
+| Class level | Read from the class title: "AB", 1xx, 2xx, "ADV Concepts" | User choice |
+| Scope | Per dance | User choice |
+| Guests | Admin links a guest to an account; its check-ins move over | User choice |
+| Admin overrides | An admin can promote a student at any time, to any level (including Advanced Concepts), without the requirements being met | User choice |
+| Maximum level | An admin can set a per-dance cap for a student; they never show as "ready" past it, and promotions above it are refused until the cap is raised or cleared | User choice |
+
+### Defaults to confirm (Claude's recommendation; say if any is wrong)
+
+1. **Admin settings:** the 12 classes / 4 months / 6 months / 24 classes are
+   editable on the admin page per level (same for every dance).
+2. **Existing check-ins count:** past check-ins (since slice 1) count from day
+   one; nobody is moved up automatically.
+3. **A class counts once per day** (as check-ins already are).
+4. **Admins can move someone back down.**
+5. **Titles the app can't place** (no AB/1xx/2xx/ADV) count toward nothing and
+   are listed for the admin so the title can be fixed in the sheet.
+6. **Levels are kept in Firestore** on the student's profile, written only by
+   Netlify functions (students can't change their own). The sheet gets no
+   level column in this slice.
+7. **Linking a guest is undoable** by the admin (unlink moves the check-ins
+   back to the guest name); Attendance rows are renamed to the account name
+   by the existing rename sync.
+
+### Done means
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | Class titles map to levels: "AB" -> AB, 101/102/1xx -> 100, 2xx -> 200, "ADV Concepts n" -> ADV, anything else -> unplaced | unit test over the real WCS titles |
+| 2 | Progress counts only same-dance, current-level classes, once per day, and only after AB where the dance has one | function test against the emulators |
+| 3 | A student with 12 counted 100-level classes over 4+ months shows as "ready" for 200; 11 classes, or under 4 months, does not | function test (backdated check-ins) |
+| 4 | ADV eligibility needs both 6 months since the first 200-level class and N 200-level classes; changing N on the admin page changes the result | function test |
+| 5a | An admin can promote a student who is not ready, straight to any level; a cap stops "ready" at the cap and refuses promotions above it until raised | function test |
+| 5 | Only an admin can confirm a move, set a level or cap, or link a guest; a student's request is refused, and Firestore rules stop students writing their level | function test + rules test on the emulator |
+| 6 | "My attendance" shows a card per attended dance with counts, months, and "Start with AB" when needed | browser preview at 375 px and desktop against the emulators |
+| 7 | Admin page: "Ready to move up" list with confirm; level settings; promote/set level and cap per student; guest link and unlink | browser preview against the emulators |
+| 8 | A check-in above the student's level succeeds and is flagged "above level" on the class attendance list | function test + browser preview |
+| 9 | Linking a guest moves its check-ins to the account (progress updates, Attendance rows renamed on the next sync); unlinking restores them | function test with the fake workbook |
+| 10 | All tests pass; `npm run build` passes, main bundle under 330 kB; the calculator is untouched | test and build output, diff |
+
+### Reference to match
+
+The existing "My attendance" page and admin pages (slices 1-2) for layout and style.
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff.
 
 ---
 
