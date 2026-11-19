@@ -1,6 +1,6 @@
 // Check-ins -> the Attendance worksheet (attendance slice 3B, docs/spec.md).
 //
-// Date | Time | Slot | Class | Name | How | Guest | Check-in ID
+// Date | Slot | Name | Class | Time | How | Guest | Check-in ID
 //
 // Rows are found by Check-in ID (column H), never by position alone. New rows go
 // above the first row with the same or an earlier date (newest day first). A row
@@ -63,12 +63,12 @@ const cellSerial = (v: string | undefined): number | null => {
 const text = (s: string) => ({ userEnteredValue: { stringValue: s } });
 const cells = (r: AttendanceRow) => [
   { userEnteredValue: { numberValue: serialOf(r.date) }, userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'mm-dd-yyyy' } } },
+  text(r.slotLabel),
+  text(r.name),
+  text(r.title),
   r.method === 'qr' && r.at
     ? { userEnteredValue: { numberValue: studioTimeFraction(r.at) }, userEnteredFormat: { numberFormat: { type: 'TIME', pattern: 'h:mm AM/PM' } } }
     : { userEnteredFormat: { numberFormat: { type: 'TIME', pattern: 'h:mm AM/PM' } } },
-  text(r.slotLabel),
-  text(r.title),
-  text(r.name),
   text(r.method === 'qr' ? 'QR' : 'Added'),
   text(r.guest ? 'yes' : ''),
   text(r.id),
