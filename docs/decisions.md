@@ -13,6 +13,12 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Main bundle limit raised from 320 to 330 kB.
 - Guardrails added: ask before editing the calculator files and before `firebase deploy`.
 
+## 2026-11-18 - Slice 4 done
+
+- Verified on the user's phone (SM-F946U): link verified by Android, camera scans open the app (closed and open), other links stay in the browser, menu scanner checks in / rejects other codes / backs out, no camera permission.
+- Release: 1.3.0 (versionCode 12) AAB built and signed; upload to Play internal testing is the user's step.
+- CLAUDE.md: last versionCode is now 12.
+
 ## 2026-11-18 - Slice 4 (Android app links + scanner) spec
 
 - Scope: app links (class QR codes open the app) and an in-app scanner, reached from the left menu only.
