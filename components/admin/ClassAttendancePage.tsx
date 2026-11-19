@@ -13,6 +13,8 @@ import {
   MAX_SLOT_TEXT, type DayCheckin, type Guest, type Slot,
 } from '../../services/attendanceService';
 import { useSyllabus } from '../../services/useSyllabus';
+import { subscribeAllLevels, useDanceIndex, type Levels } from '../../services/levelsService';
+import { aboveLevel } from '../../services/levels';
 
 interface Account { uid: string; name: string; email: string }
 type Person = { kind: 'account'; uid: string; name: string; sub: string } | { kind: 'guest'; id: string; name: string };
@@ -39,6 +41,7 @@ export const ClassAttendancePage: React.FC = () => {
   const [date, setDate] = useState(today);
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const syllabus = useSyllabus();
+  const { danceOf } = useDanceIndex(syllabus);
   const [rows, setRows] = useState<DayCheckin[] | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [failed, setFailed] = useState(false);
@@ -54,6 +57,7 @@ export const ClassAttendancePage: React.FC = () => {
   const [removing, setRemoving] = useState<DayCheckin | null>(null);
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState<Guest | null>(null);
+  const [levels, setLevels] = useState<Record<string, Levels>>({});
   const [newName, setNewName] = useState('');
 
   useEffect(() => {
@@ -62,7 +66,9 @@ export const ClassAttendancePage: React.FC = () => {
     const fail = (e: unknown) => { console.error('attendance', e); setFailed(true); };
     const a = subscribeSlots(setSlots, fail);
     const b = subscribeGuests(setGuests, fail);
-    return () => { a(); b(); };
+    // Slice 5: levels only flag "above level"; failing to load them hides the flag.
+    const c = subscribeAllLevels(setLevels);
+    return () => { a(); b(); c(); };
   }, [isAdmin, attempt]);
 
   useEffect(() => {
@@ -122,7 +128,8 @@ export const ClassAttendancePage: React.FC = () => {
   const people: Person[] = (() => {
     const q = search.trim().toLowerCase();
     const list: Person[] = [
-      ...guests.map(g => ({ kind: 'guest' as const, id: g.id, name: g.name })),
+      // A guest linked to an account (slice 5) is added as that account.
+      ...guests.filter(g => !g.linkedUid).map(g => ({ kind: 'guest' as const, id: g.id, name: g.name })),
       ...(accounts ?? []).map(a => ({ kind: 'account' as const, uid: a.uid, name: a.name || a.email.split('@')[0] || 'No name', sub: a.email })),
     ];
     const hits = q
@@ -289,6 +296,9 @@ export const ClassAttendancePage: React.FC = () => {
                               ? <span className="inline-flex items-center gap-1"><QrCode className="h-3 w-3" /> QR</span>
                               : <span className="inline-flex items-center gap-1"><UserPlus className="h-3 w-3" /> Added</span>}
                             {r.guestId && <span>Guest</span>}
+                            {r.uid && danceOf(r.title) && aboveLevel(r.title, levels[r.uid]?.[danceOf(r.title)!]) && (
+                              <span className="rounded-full bg-amber-400/15 px-2 py-0.5 font-semibold text-amber-200">Above level</span>
+                            )}
                             {/* Scan time only: a manual add's time is when the admin typed it, not when they came. */}
                             {r.method === 'qr' && time(r.at) && <span>{time(r.at)}</span>}
                           </p>

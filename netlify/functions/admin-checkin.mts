@@ -53,6 +53,8 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   } else {
     const guest = (await db.doc(`guests/${guestId}`).get()).data();
     if (!guest || typeof guest.name !== 'string') return json({ error: 'That guest no longer exists.' }, 404);
+    // Slice 5: a guest linked to an account is checked in as that account.
+    if (guest.linkedUid) return json({ error: 'That guest is linked to an account. Check in the account instead.' }, 409);
     name = guest.name;
   }
 

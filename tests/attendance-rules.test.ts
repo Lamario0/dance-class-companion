@@ -87,3 +87,22 @@ test('a student reads only their own check-ins', async () => {
 test('admins read all check-ins', async () => {
   await assertSucceeds(getDocs(collection(admin(), 'checkins')));
 });
+
+test('levels (slice 5): a student reads only their own, admins read all, nobody writes; anyone signed in reads the targets', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'levels/alice'), { dances: { WCS: { level: '100', cap: null } } });
+    await setDoc(doc(ctx.firestore(), 'levels/bob'), { dances: { WCS: { level: '200', cap: null } } });
+    await setDoc(doc(ctx.firestore(), 'settings/levels'), { basicsClasses: 12 });
+  });
+  await assertSucceeds(getDoc(doc(alice(), 'levels/alice')));
+  await assertFails(getDoc(doc(alice(), 'levels/bob')));
+  await assertSucceeds(getDoc(doc(admin(), 'levels/bob')));
+  await assertFails(getDoc(doc(guest(), 'levels/alice')));
+  await assertFails(setDoc(doc(alice(), 'levels/alice'), { dances: { WCS: { level: 'ADV', cap: null } } }));
+  await assertFails(updateDoc(doc(alice(), 'levels/alice'), { 'dances.WCS.level': 'ADV' }));
+  await assertFails(setDoc(doc(admin(), 'levels/alice'), { dances: { WCS: { level: 'ADV', cap: null } } }));
+  await assertSucceeds(getDoc(doc(alice(), 'settings/levels')));
+  await assertFails(getDoc(doc(guest(), 'settings/levels')));
+  await assertFails(setDoc(doc(admin(), 'settings/levels'), { basicsClasses: 1 }));
+  await assertFails(getDoc(doc(alice(), 'settings/other')));
+});

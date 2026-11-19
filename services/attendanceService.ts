@@ -161,12 +161,14 @@ export const subscribeCheckinsOn = (date: string, onChange: (rows: DayCheckin[])
 export interface Guest {
   id: string;
   name: string;
+  /** slice 5: linked to this account; its check-ins now belong to it */
+  linkedUid?: string;
 }
 
 export const subscribeGuests = (onChange: (rows: Guest[]) => void, onError: (e: FirestoreError) => void) =>
   onSnapshot(
     collection(db, 'guests'),
-    snap => onChange(snap.docs.map(s => ({ id: s.id, name: s.data().name ?? '' })).sort((a, b) => a.name.localeCompare(b.name))),
+    snap => onChange(snap.docs.map(s => ({ id: s.id, name: s.data().name ?? '', linkedUid: s.data().linkedUid })).sort((a, b) => a.name.localeCompare(b.name))),
     onError,
   );
 

@@ -22,7 +22,10 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   const guestId = body?.guestId;
   if (typeof guestId !== 'string' || !GUEST_ID.test(guestId)) return json({ error: 'That guest no longer exists.' }, 404);
   const db = adminDb();
-  const name = (await db.doc(`guests/${guestId}`).get()).data()?.name;
+  const guest = (await db.doc(`guests/${guestId}`).get()).data();
+  // Slice 5: a linked guest's check-ins carry the account's name.
+  if (guest?.linkedUid) return json({ status: 'linked', changed: 0 });
+  const name = guest?.name;
   if (typeof name !== 'string' || !name.trim()) return json({ error: 'That guest no longer exists.' }, 404);
   const changed = await renameCheckins(db, sheetsApi(), 'guestId', guestId, name);
   return json({ status: 'renamed', changed });
