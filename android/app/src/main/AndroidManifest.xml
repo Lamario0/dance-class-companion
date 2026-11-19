@@ -22,6 +22,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Class QR codes (https://danceclasscompanion.com/checkin/<slot>) open the app (slice 4).
+                 Verified by public/.well-known/assetlinks.json; other site links stay in the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="danceclasscompanion.com" android:pathPrefix="/checkin/" />
+            </intent-filter>
+
         </activity>
 
         <provider
