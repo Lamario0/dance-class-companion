@@ -18,7 +18,7 @@ import { MenuButton, SideMenu } from './components/menu/SideMenu';
 import { LeaveGuardProvider } from './components/menu/LeaveGuard';
 import { apiUrl } from './services/platform';
 import { useAndroidBackButton } from './components/menu/backButton';
-import { NotebookPen, Users, QrCode, CalendarCheck, ClipboardList } from 'lucide-react';
+import { NotebookPen, Users, QrCode, CalendarCheck, ClipboardList, GraduationCap } from 'lucide-react';
 // The Notes page pulls in Firestore, so it loads on first visit.
 const NotesPage = React.lazy(() => import('./components/notes/NotesUI').then(m => ({ default: m.NotesPage })));
 
@@ -27,6 +27,7 @@ const StudentsPage = React.lazy(() => import('./components/admin/StudentsPage').
 // Attendance: all three pull in Firestore (and the slots page the QR library), so they load on first visit.
 const SlotsPage = React.lazy(() => import('./components/admin/SlotsPage').then(m => ({ default: m.SlotsPage })));
 const ClassAttendancePage = React.lazy(() => import('./components/admin/ClassAttendancePage').then(m => ({ default: m.ClassAttendancePage })));
+const LevelsPage = React.lazy(() => import('./components/admin/LevelsPage').then(m => ({ default: m.LevelsPage })));
 const AttendancePage = React.lazy(() => import('./components/attendance/AttendancePage').then(m => ({ default: m.AttendancePage })));
 const CheckInView = React.lazy(() => import('./components/attendance/CheckInView').then(m => ({ default: m.CheckInView })));
 
@@ -44,6 +45,7 @@ const MENU_PAGES = [
   { tab: Tab.SLOTS, label: 'Slots', title: 'Class slots', icon: QrCode },
   { tab: Tab.ATTENDANCE, label: 'Attendance', title: 'My attendance', icon: CalendarCheck },
   { tab: Tab.CLASS_ATTENDANCE, label: 'Attendance', title: 'Attendance', icon: ClipboardList },
+  { tab: Tab.LEVELS, label: 'Levels', title: 'Levels', icon: GraduationCap },
   { tab: Tab.CHECKIN, label: 'Check in', title: 'Check in', icon: CalendarCheck },
 ];
 const MENU_TABS = MENU_PAGES.map(p => p.tab);
@@ -57,7 +59,7 @@ const LeaveMenuPageWhenNotAllowed: React.FC<{ tab: Tab; onLeave: () => void }> =
   useEffect(() => {
     if (loading) return;
     const needsUser = tab === Tab.NOTES || tab === Tab.ATTENDANCE;
-    const needsAdmin = tab === Tab.STUDENTS || tab === Tab.SLOTS || tab === Tab.CLASS_ATTENDANCE;
+    const needsAdmin = tab === Tab.STUDENTS || tab === Tab.SLOTS || tab === Tab.CLASS_ATTENDANCE || tab === Tab.LEVELS;
     if ((needsUser && !user) || (needsAdmin && (!user || !isAdmin))) onLeave();
   }, [tab, loading, user, isAdmin, onLeave]);
   return null;
@@ -263,7 +265,7 @@ const App: React.FC = () => {
   const videoOfMonth = data?.videos.find(v => v.category === 'month');
   // fetchSheetData resolves to empty lists when the sheet can't be reached.
   // Attendance pages don't use the Sheets content: a QR scan must work even if the class data is slow or down.
-  const sheetFree = activeTab === Tab.CHECKIN || activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CLASS_ATTENDANCE;
+  const sheetFree = activeTab === Tab.CHECKIN || activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CLASS_ATTENDANCE || activeTab === Tab.LEVELS;
   const loadFailed =
     !!data && !data.classes.length && !data.videos.length && !data.songs.length && !data.announcements.length;
   const current = navItems.find(i => i.tab === activeTab) ?? MENU_PAGES.find(p => p.tab === activeTab) ?? BASE_NAV[0];
@@ -356,7 +358,7 @@ const App: React.FC = () => {
                   <StudentsPage />
                 </React.Suspense>
               )}
-              {(activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CLASS_ATTENDANCE || activeTab === Tab.CHECKIN) && (
+              {(activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CLASS_ATTENDANCE || activeTab === Tab.LEVELS || activeTab === Tab.CHECKIN) && (
                 <React.Suspense
                   fallback={
                     <div className="flex items-center gap-3 py-6 text-text-mid">
@@ -368,6 +370,7 @@ const App: React.FC = () => {
                   {activeTab === Tab.SLOTS && <SlotsPage />}
                   {activeTab === Tab.ATTENDANCE && <AttendancePage />}
                   {activeTab === Tab.CLASS_ATTENDANCE && <ClassAttendancePage />}
+                  {activeTab === Tab.LEVELS && <LevelsPage />}
                   {activeTab === Tab.CHECKIN && (
                     <CheckInView
                       key={checkin.n}
@@ -468,6 +471,7 @@ const App: React.FC = () => {
         onSlots={() => { setMenuOpen(false); navigateTo(Tab.SLOTS); }}
         onAttendance={() => { setMenuOpen(false); navigateTo(Tab.ATTENDANCE); }}
         onClassAttendance={() => { setMenuOpen(false); navigateTo(Tab.CLASS_ATTENDANCE); }}
+        onLevels={() => { setMenuOpen(false); navigateTo(Tab.LEVELS); }}
         onScanned={openCheckin}
         // Focus the hamburger first, so the account sheet returns focus there (not to the gone drawer item).
         onAccount={() => { menuButtonRef.current?.focus(); setMenuOpen(false); setAccountOpen(true); }}

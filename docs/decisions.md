@@ -13,6 +13,16 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Main bundle limit raised from 320 to 330 kB.
 - Guardrails added: ask before editing the calculator files and before `firebase deploy`.
 
+## 2026-11-19 - Slice 5 (levels) spec and build
+
+- Levels per dance: 100 / 200 / Advanced Concepts. 100->200 needs 12 classes at 100 level (after AB where the dance has one) and 4 months; 200->ADV needs 6 months and 24 200-level classes; ADV is invite only. Targets are editable on the admin Levels page.
+- Counts make a student "ready"; an admin confirms. Admins can also promote anyone to any level at any time, move them down, and set a per-dance maximum level that stops "ready" and refuses promotions above it.
+- Show + warn: a check-in above a student's level still works and is flagged "Above level" on admin Attendance.
+- Class level comes from the title: AB; Basics or 1xx -> 100; Intermediate or 2xx -> 200; ADV/Advanced -> ADV. Titles it can't place, or that aren't in the Classes worksheet, count toward nothing and are listed on the Levels page.
+- Guests can be linked to an account (check-ins move over, keep `linkedGuestId`) and unlinked. Deleting a linked account unlinks first. A linked guest can't be checked in as a guest.
+- Levels live in `levels/{uid}` and targets in `settings/levels`, written only by /api/admin/levels.
+- Known edge: linking on the same class day as the account's own later check-in can leave two rows for that class; counting still counts it once.
+
 ## 2026-11-18 - Slice 4 done
 
 - Verified on the user's phone (SM-F946U): link verified by Android, camera scans open the app (closed and open), other links stay in the browser, menu scanner checks in / rejects other codes / backs out, no camera permission.

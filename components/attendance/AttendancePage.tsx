@@ -1,9 +1,10 @@
-// My attendance (attendance slice 1): total classes, count per class title,
+// My attendance (attendance slice 1; level progress from slice 5): total classes, count per class title,
 // and a dated list of check-ins, newest first. Signed-in student's own only.
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, RotateCw } from 'lucide-react';
 import { useAccount } from '../auth/AuthProvider';
 import { DancingDots, EmptyState } from '../ui/Doodles';
+import { ProgressCards } from './ProgressCards';
 import { subscribeMyCheckins, dayLabel, type Checkin } from '../../services/attendanceService';
 
 export const AttendancePage: React.FC = () => {
@@ -45,6 +46,7 @@ export const AttendancePage: React.FC = () => {
         </div>
       ) : (
         <div className="flex flex-col gap-5">
+          {user && <ProgressCards uid={user.uid} rows={rows} />}
           <section className="card p-5" aria-label="Totals">
             <p className="text-[44px] font-extrabold leading-none tracking-tight text-brand-soft">{rows.length}</p>
             <p className="mt-1 text-text-mid">{rows.length === 1 ? 'class attended' : 'classes attended'}</p>

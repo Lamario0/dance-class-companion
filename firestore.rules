@@ -216,6 +216,17 @@ service cloud.firestore {
       }
     }
 
+    // Levels (attendance slice 5): written only by /api/admin/levels. A student
+    // reads their own; admins read all. The targets are readable by anyone signed in.
+    match /levels/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isVerifiedAdmin());
+      allow write: if false;
+    }
+    match /settings/levels {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     function isVerifiedAdmin() {
       return request.auth != null
         && request.auth.token.email_verified == true

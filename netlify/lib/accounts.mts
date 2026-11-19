@@ -1,6 +1,7 @@
 // Account removal shared by self-deletion (/api/delete-account) and admin
 // deletion (/api/admin/delete-user), so both behave identically.
 import { FieldValue } from 'firebase-admin/firestore';
+import { unlinkGuestsOf } from './guestLinks.mts';
 import { adminAuth, adminDb } from './firebaseAdmin.mts';
 
 /**
@@ -29,6 +30,8 @@ export const deleteAccountData = async (uid: string) => {
   }
   // Check-ins stay so headcounts stay right, relabelled the same way (slice 3B);
   // `sheet: 'pending'` makes the sync job rewrite their Attendance rows.
+  // Slice 5: guests linked to this account get their own check-ins back first.
+  await unlinkGuestsOf(db, uid);
   const checkins = await db.collection('checkins').where('uid', '==', uid).get();
   for (let i = 0; i < checkins.docs.length; i += 400) {
     const batch = db.batch();
