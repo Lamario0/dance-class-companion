@@ -31,9 +31,70 @@ Only the current slice is specced. Later ones are specced when reached.
 |---|---|---|
 | 1 | Slots + QR check-in: admins create slots with printable QR codes; a signed-in student scans and is checked into the slot's current class (once per day); "My attendance" page | done (live 2026-11-18) |
 | 2 | Admin attendance tools: manual check-in (including people without an account, admin-added only), per-class headcount and who came | done (live 2026-11-18) |
-| 3 | Syllabus-driven classes and sheet sync: class cards come from a Classes worksheet built from the syllabus; slots in a Slots worksheet both ways (3A); every check-in becomes an Attendance row (3B) | 3A done (live 2026-11-18); 3B specced below (awaiting approval) |
-| 4 | Android: scanning a QR opens the app (app links) and/or an in-app scanner | not specced |
+| 3 | Syllabus-driven classes and sheet sync: class cards come from a Classes worksheet built from the syllabus; slots in a Slots worksheet both ways (3A); every check-in becomes an Attendance row (3B) | done (live 2026-11-18) |
+| 4 | Android: scanning a class QR opens the app (app links), plus a "Scan to check in" scanner in the menu; ships as 1.3.0 | specced below (awaiting approval) |
 | 5 | Levels and progress: classes toward the next level, shown to students | not specced |
+
+---
+
+## Slice 4 - Android: QR codes open the app
+
+### What it does
+
+- **App links:** on an Android phone with the app installed, scanning a
+  class QR with the camera (or tapping a `https://danceclasscompanion.com/checkin/<slot>`
+  link) opens the app straight to that check-in, instead of the browser.
+  Works whether the app was closed or already open. Without the app, the
+  link opens the website as today.
+- **In-app scanner:** a "Scan to check in" item in the left menu (Android app
+  only). It opens the phone's QR scanner; a class code checks you in, any
+  other code says "That's not a class code", and backing out returns to the
+  app.
+- Ships as **1.3.0 (versionCode 12)**. 1.2.0 is never uploaded: 1.3.0
+  includes everything in it.
+
+### Confirmed decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Scope | App links and an in-app scanner | User choice |
+| Scanner button | Left menu only (next to My attendance); the Classes tab is unchanged | User choice |
+| Release | Skip 1.2.0; ship 1.3.0 (versionCode 12) to Play internal testing | User choice: one upload and one review |
+
+### Defaults to confirm (Claude's recommendation; say if any is wrong)
+
+1. **Only check-in links open the app.** Other danceclasscompanion.com pages
+   keep opening in the browser.
+2. **Verified links:** the site serves `/.well-known/assetlinks.json` naming
+   the app (`com.danceclasscompanion.app`) and both signing keys (the upload
+   key and Play's app-signing key), so Android opens the app without asking
+   "open with?".
+3. **Scanner:** Google's built-in code scanner (through Play services), so
+   the app needs **no camera permission**. It is loaded only when used, so
+   the website's bundle doesn't grow.
+4. **Same check-in flow as a scan in the browser:** signed out → sign in
+   first; unverified → "Check your email"; once per slot per day.
+5. **iOS** stays out of scope (no Apple developer account yet).
+
+### Done means
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | `https://danceclasscompanion.com/.well-known/assetlinks.json` is served as JSON with the package name and both SHA-256 fingerprints | curl after deploy |
+| 2 | Android reports the link as verified for the app | `adb shell pm get-app-links com.danceclasscompanion.app` on the user's phone |
+| 3 | Scanning a class QR with the phone camera opens the app to that check-in and completes it (signed in, verified), both when the app was closed and when it was open | user's phone (Claude watches logcat) |
+| 4 | Other site links (e.g. the home page) still open the browser | user's phone |
+| 5 | "Scan to check in" appears in the menu only in the Android app; a class code checks in, a non-class code shows "That's not a class code", backing out returns to the app; no camera permission is requested | user's phone + browser preview (item hidden on the web) |
+| 6 | The website is unchanged apart from serving assetlinks.json; `npm run build` passes, main bundle under 330 kB | build output + browser preview |
+| 7 | A signed 1.3.0 / versionCode 12 AAB is built and its signature verified; the APK installs over 1.2.0 on the user's phone | apksigner/jarsigner output + `adb install -r` |
+
+### Reference to match
+
+Slice 1's check-in screen (what a scan in the browser does today).
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff.
 
 ---
 
