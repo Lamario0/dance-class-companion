@@ -33,7 +33,7 @@ Only the current slice is specced. Later ones are specced when reached.
 | 2 | Admin attendance tools: manual check-in (including people without an account, admin-added only), per-class headcount and who came | done (live 2026-11-18) |
 | 3 | Syllabus-driven classes and sheet sync: class cards come from a Classes worksheet built from the syllabus; slots in a Slots worksheet both ways (3A); every check-in becomes an Attendance row (3B) | done (live 2026-11-18) |
 | 4 | Android: scanning a class QR opens the app (app links), plus a "Scan to check in" scanner in the menu; ships as 1.3.0 | done (verified on phone 2026-11-18; 1.3.0 awaiting Play upload) |
-| 5 | Levels and progress: per-dance levels (100 / 200 / Advanced Concepts), progress shown to students, admin confirms moves up, guests linkable to accounts | built on branch feat/slice5-levels (awaiting merge) |
+| 5 | Levels and progress: per-dance levels (100 / 200 / Advanced Concepts), progress shown to students, admin confirms moves up, guests linkable to accounts | done (live 2026-11-19) |
 
 ---
 
