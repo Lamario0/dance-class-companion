@@ -60,7 +60,7 @@ export class FakeBook implements SheetsApi {
     while (last > 0 && !(g[last - 1] ?? []).some(Boolean)) last--;
     rows.forEach((row, i) => (g[last + i] = row.map(String)));
   }
-  async meta() {
+  async meta(_withRow1 = true) {
     await this.check();
     const titles = new Set([...this.grids.keys(), ...this.row1.keys()]);
     return [...titles].map(title => {

@@ -26,8 +26,8 @@ export interface SheetsApi {
   update(range: string, rows: (string | boolean)[][], asText?: boolean): Promise<void>;
   /** Add rows after the last row of the worksheet holding `range`. */
   append(range: string, rows: (string | boolean)[][], asText?: boolean): Promise<void>;
-  /** Every worksheet's title, id and row 1. */
-  meta(): Promise<SheetMeta[]>;
+  /** Every worksheet's title and id, and (unless `withRow1` is false) its row 1. */
+  meta(withRow1?: boolean): Promise<SheetMeta[]>;
   /** spreadsheets.batchUpdate: all the requests apply together, in order, or none do. */
   batch(requests: object[]): Promise<void>;
 }
@@ -123,17 +123,24 @@ const googleApi = (sa: { client_email: string; private_key: string }): SheetsApi
         body: JSON.stringify({ values: rows }),
       });
     },
-    async meta() {
-      const fields = 'sheets(properties(title,sheetId),data(rowData(values(formattedValue,dataValidation(condition(type))))))';
-      const r = await call(`?includeGridData=true&ranges=${enc('1:1')}&fields=${enc(fields)}`);
-      return (r.sheets ?? []).map((s: any) => ({
-        title: s.properties.title as string,
-        sheetId: s.properties.sheetId as number,
-        row1: ((s.data?.[0]?.rowData?.[0]?.values ?? []) as any[]).map(v => ({
+    async meta(withRow1 = true) {
+      // Every worksheet first. (A range like "1:1" with no sheet name means the FIRST
+      // worksheet only, so row 1 is then asked for by name, one range per worksheet.)
+      const list = (await call(`?fields=${enc('sheets(properties(title,sheetId))')}`)).sheets ?? [];
+      const sheets: SheetMeta[] = list.map((s: any) => ({ title: s.properties.title as string, sheetId: s.properties.sheetId as number, row1: [] }));
+      if (!withRow1 || !sheets.length) return sheets;
+      const fields = 'sheets(properties(sheetId),data(rowData(values(formattedValue,dataValidation(condition(type))))))';
+      const ranges = sheets.map(s => `ranges=${enc(`${sheetRef(s.title)}!1:1`)}`).join('&');
+      const r = await call(`?includeGridData=true&${ranges}&fields=${enc(fields)}`);
+      for (const s of r.sheets ?? []) {
+        const m = sheets.find(x => x.sheetId === s.properties?.sheetId);
+        if (!m) continue;
+        m.row1 = ((s.data?.[0]?.rowData?.[0]?.values ?? []) as any[]).map(v => ({
           text: String(v.formattedValue ?? ''),
           checkbox: v.dataValidation?.condition?.type === 'BOOLEAN',
-        })),
-      }));
+        }));
+      }
+      return sheets;
     },
     async batch(requests) {
       if (requests.length) await call(':batchUpdate', { method: 'POST', body: JSON.stringify({ requests }) });

@@ -77,7 +77,7 @@ const cells = (r: AttendanceRow) => [
 let sheetIdCache: number | null = null;
 const attendanceSheetId = async (api: SheetsApi) => {
   if (sheetIdCache !== null) return sheetIdCache;
-  const s = (await api.meta()).find(m => m.title === ATTENDANCE);
+  const s = (await api.meta(false)).find(m => m.title === ATTENDANCE);
   if (!s) throw new Error('No Attendance worksheet');
   return (sheetIdCache = s.sheetId);
 };
