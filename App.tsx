@@ -54,6 +54,15 @@ const MENU_TABS = MENU_PAGES.map(p => p.tab);
  * Lives inside AuthProvider (App itself sits above it): leaves a menu page when
  * the account can no longer see it (signed out; admin role gone for Students).
  */
+/** Tells App (which sits above AuthProvider) whether a verified admin account is signed in. */
+const ReportAdmin: React.FC<{ onChange: (admin: boolean) => void }> = ({ onChange }) => {
+  const { user, loading, isAdmin } = useAccount();
+  useEffect(() => {
+    if (!loading) onChange(!!user && isAdmin);
+  }, [user, loading, isAdmin, onChange]);
+  return null;
+};
+
 const LeaveMenuPageWhenNotAllowed: React.FC<{ tab: Tab; onLeave: () => void }> = ({ tab, onLeave }) => {
   const { user, loading, isAdmin } = useAccount();
   useEffect(() => {
@@ -126,7 +135,14 @@ const App: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
   // Calculator passcode (dance-party attendance). Chat moderation uses the admin account role instead.
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passcodeOk, setPasscodeOk] = useState(false);
+  // A signed-in admin account opens the calculator without the passcode.
+  const [accountAdmin, setAccountAdmin] = useState(false);
+  const isAuthenticated = passcodeOk || accountAdmin;
+  // Signing an admin out while on the calculator returns to Classes.
+  useEffect(() => {
+    if (activeTab === Tab.CALCULATOR && !isAuthenticated) setActiveTab(Tab.CLASSES);
+  }, [activeTab, isAuthenticated]);
   const [loginError, setLoginError] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
   const clickTimeoutRef = useRef<number | null>(null);
@@ -205,7 +221,7 @@ const App: React.FC = () => {
 
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
+    setPasscodeOk(false);
     setDirection('left');
     setActiveTab(Tab.CLASSES);
   };
@@ -243,7 +259,7 @@ const App: React.FC = () => {
         body: JSON.stringify({ password: passwordInput }),
       });
       if (!response.ok) throw new Error('Incorrect password');
-      setIsAuthenticated(true);
+      setPasscodeOk(true);
       setShowPasswordPrompt(false);
       setDirection('right');
       setActiveTab(Tab.CALCULATOR);
@@ -276,6 +292,7 @@ const App: React.FC = () => {
      <LeaveGuardProvider value={leaveGuard}>
      <MusicProvider songs={data?.songs ?? EMPTY_SONGS}>
       {/* Signing out on the Notes page returns to Classes. */}
+      <ReportAdmin onChange={setAccountAdmin} />
       <LeaveMenuPageWhenNotAllowed tab={activeTab} onLeave={() => { notesDirty.current = false; setActiveTab(Tab.CLASSES); }} />
       <div id="app-shell" className="min-h-screen bg-surface-0 font-sans text-text-hi flex flex-col">
         {/* Header — slim on mobile: logo (secret triple-tap) + page title */}
@@ -415,6 +432,7 @@ const App: React.FC = () => {
         <footer className="border-t border-line/60 pt-8 pb-[calc(var(--nav-h)+var(--dock-h)+var(--chat-h)+24px)]">
           <div className="mx-auto max-w-5xl px-4 text-center text-[14px] text-text-lo">
             <p>© {new Date().getFullYear()} Dance Class Companion · Master the basics. Dance your story.</p>
+            <p className="mt-2">Version {__APP_VERSION__}</p>
             <p className="mt-2">
               <a href="/privacy.html" className="inline-block py-3 underline underline-offset-4 hover:text-text-mid">Privacy Policy</a>
             </p>

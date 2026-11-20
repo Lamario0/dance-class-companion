@@ -49,7 +49,11 @@ const netlifyFunctionsInDev = (mode: string): Plugin => ({
   },
 });
 
+/** The app version shown in the footer: the Android versionName, so there is one place to bump. */
+const appVersion = /versionName\s+"([^"]+)"/.exec(fs.readFileSync(path.resolve(__dirname, 'android/app/build.gradle'), 'utf8'))?.[1] ?? 'dev';
+
 export default defineConfig(({ mode }) => ({
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   server: {
     port: 3000,
     host: '0.0.0.0',
