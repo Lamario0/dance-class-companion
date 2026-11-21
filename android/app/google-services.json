@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "124994612449-ot2p91jal91flq9ta04cu7e1aosss6tr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.danceclasscompanion.app",
+            "certificate_hash": "c6ebaad29860e06a4e5ae56f87d0c767c3a26b9a"
+          }
+        },
+        {
           "client_id": "124994612449-1eg8626t8f5664anmci9953cvomui2ug.apps.googleusercontent.com",
           "client_type": 3
         }

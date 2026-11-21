@@ -13,6 +13,11 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Main bundle limit raised from 320 to 330 kB.
 - Guardrails added: ask before editing the calculator files and before `firebase deploy`.
 
+## 2026-11-21 - Play app-signing key
+
+- Play re-signs installs with Google's app-signing key (SHA-1 `c6ebaad29860e06a4e5ae56f87d0c767c3a26b9a`, SHA-256 `AE:ED:CD:27:…:F0:36`), not `dcc-release-key`. The earlier note saying they were the same was wrong; it broke native Google sign-in in the Play build of 1.3.1 ("didn't work on this phone") while adb installs worked.
+- Both keys' SHA-1/SHA-256 are now on the Firebase Android app (added 2026-11-21) and both SHA-256s are in `assetlinks.json`.
+
 ## 2026-11-20 - Calculator for admins, 1.3.1
 
 - A signed-in verified admin account opens the calculator (logo triple-tap) without the passcode; signed out, the passcode is still asked. Signing the admin out leaves the calculator. The calculator itself is unchanged.
