@@ -3,6 +3,7 @@
 // for messages under 2 minutes old, to every signed-in account's devices except
 // the poster's, accounts that turned chat notifications off, and accounts that
 // muted the poster (admins can't be muted). No sign-in needed: guests post too.
+import { createHash } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminConfigured, adminDb, json } from '../lib/firebaseAdmin.mts';
 import { withAppCors } from '../lib/cors.mts';
@@ -10,6 +11,8 @@ import { allDevices, sendTo } from '../lib/push.mts';
 import { muteKey, readMutes } from '../../services/mutes.ts';
 
 const MAX_AGE_MS = 2 * 60 * 1000;
+/** One alert per poster per 30 s: a burst of messages buzzes people once. */
+const PER_POSTER_MS = 30 * 1000;
 const ID = /^[A-Za-z0-9]{1,64}$/;
 
 export default withAppCors(async (req: Request, _context?: unknown) => {
@@ -38,6 +41,16 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   const posterIsAdmin = !!posterUid && m.role === 'admin'
     && (await adminAuth().getUser(posterUid).then(u => u.customClaims?.['admin'] === true, () => false));
   const key = muteKey({ uid: posterUid, author: String(m.author ?? '') });
+
+  // Throttle per poster (the message stays marked, so it's never retried).
+  const lastRef = db.doc(`chatNotifyLast/${createHash('sha256').update(key).digest('hex')}`);
+  const throttled = await db.runTransaction(async tx => {
+    const last = (await tx.get(lastRef)).data()?.at;
+    if (last instanceof Timestamp && Date.now() - last.toMillis() < PER_POSTER_MS) return true;
+    tx.set(lastRef, { at: Timestamp.now() });
+    return false;
+  });
+  if (throttled) return json({ status: 'throttled' });
 
   const devices = (await allDevices()).filter(d => d.uid && d.uid !== posterUid);
   const uids = [...new Set(devices.map(d => d.uid!))];

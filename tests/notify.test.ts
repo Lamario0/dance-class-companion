@@ -44,7 +44,7 @@ const call = async (fn: (r: Request) => Promise<Response>, body: unknown, token?
   const res = await fn(new Request('http://localhost/api/x', { method: 'POST', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
   return { status: res.status, body: await res.json() };
 };
-const tok = (name: string) => `${name}-${stamp}-${'x'.repeat(24)}`;
+const tok = (name: string) => `${name}-${stamp}-${'x'.repeat(120)}`;
 
 let boss: { uid: string; token: string };
 let ann: { uid: string; token: string };
@@ -69,7 +69,13 @@ before(async () => {
   }
   await adminDb().doc(`levels/${ben.uid}`).set({ dances: { WCS: { level: '200' } } });
 });
-beforeEach(() => { sent = []; dead = new Set(); });
+beforeEach(async () => {
+  sent = [];
+  dead = new Set();
+  // The per-poster throttle would hold back these quick test posts.
+  const last = await adminDb().collection('chatNotifyLast').get();
+  await Promise.all(last.docs.map(d => d.ref.delete()));
+});
 
 const post = async (over: Record<string, unknown>) => {
   const ref = adminDb().collection('chatMessages').doc();
@@ -83,6 +89,19 @@ test('registering: bad input refused; the uid comes from the sign-in, not the bo
   await call(register, { token: tok('spoof'), platform: 'web', uid: ann.uid });
   assert.equal((await adminDb().doc(`pushTokens/${tokenId(tok('spoof'))}`).get()).data()!.uid, null);
   await adminDb().doc(`pushTokens/${tokenId(tok('spoof'))}`).delete();
+  // An unverified account (posts as a guest) isn't tied to the device either.
+  const u = await adminAuth().createUser({ email: `nunv-${stamp}@test.dev`, password: PASSWORD, emailVerified: false });
+  const res = await fetch(`${AUTH}/accounts:signInWithPassword?key=fake`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `nunv-${stamp}@test.dev`, password: PASSWORD, returnSecureToken: true }) });
+  await call(register, { token: tok('unv'), platform: 'web' }, (await res.json()).idToken);
+  assert.equal((await adminDb().doc(`pushTokens/${tokenId(tok('unv'))}`).get()).data()!.uid, null);
+  await adminDb().doc(`pushTokens/${tokenId(tok('unv'))}`).delete();
+  await adminAuth().deleteUser(u.uid);
+});
+
+test('one alert per poster per 30 seconds', async () => {
+  assert.equal((await call(chatNotify, { id: await post({ author: 'Chatty Cathy' }) })).body.status, 'sent');
+  assert.equal((await call(chatNotify, { id: await post({ author: 'chatty cathy' }) })).body.status, 'throttled');
+  assert.equal((await call(chatNotify, { id: await post({ author: 'Someone else' }) })).body.status, 'sent');
 });
 
 test("criterion 1: a member's post reaches every other account's devices, not the poster's or signed-out ones", async () => {
@@ -118,7 +137,7 @@ test('criterion 5: an account with chat notifications off gets none; back on, it
   assert.ok(!tokensSent().includes(tok('cat-web')));
   sent = [];
   await adminDb().doc(`users/${cat.uid}`).update({ chatNotify: true });
-  await call(chatNotify, { id: await post({ author: 'Guest' }) });
+  await call(chatNotify, { id: await post({ author: 'Guest two' }) });
   assert.ok(tokensSent().includes(tok('cat-web')));
 });
 

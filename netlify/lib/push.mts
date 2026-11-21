@@ -34,7 +34,8 @@ export const allDevices = async (): Promise<Device[]> =>
     return { id: d.id, token: x.token, platform: x.platform, uid: typeof x.uid === 'string' ? x.uid : null };
   }).filter(d => typeof d.token === 'string' && isPlatform(d.platform));
 
-const DEAD = new Set(['messaging/registration-token-not-registered', 'messaging/invalid-registration-token', 'messaging/invalid-argument']);
+// Only codes that mean the token itself is gone (not a bad message).
+const DEAD = new Set(['messaging/registration-token-not-registered', 'messaging/invalid-registration-token']);
 
 /**
  * Sends to these devices, with separate payloads for Android and web, and

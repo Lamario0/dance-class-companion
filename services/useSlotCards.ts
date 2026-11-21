@@ -6,15 +6,10 @@
 // so it stays out of the main bundle.
 import { useEffect, useState } from 'react';
 import type { DanceClass } from '../types';
-import { loadSyllabus, slotCards, type SheetSlot, type Syllabus } from './dataService';
+import { loadSyllabus, slotCards, withSheet, type SheetSlot, type Syllabus } from './dataService';
 
 type Slot = SheetSlot & { order?: number };
 
-/** The slot as the Slots worksheet has it (the sheet wins when it has a row). Same as attendanceService.withSheet. */
-const withSheet = (slot: Slot, s: Syllabus | null): Slot => {
-  const row = s?.slots.find(x => x.id === slot.id);
-  return row ? { ...slot, label: row.label || slot.label, title: row.title || slot.title } : slot;
-};
 
 export const useSlotCards = (fallback: DanceClass[]): DanceClass[] => {
   const [slots, setSlots] = useState<Slot[] | null>(null);

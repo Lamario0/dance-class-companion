@@ -29,7 +29,7 @@ Android: `npm run build && npx cap sync android`, then `gradlew bundleRelease` w
 - UI change -> check it in the browser preview at 375px and desktop before calling it done
 - Firestore rules change -> run the rules checks against the emulator before deploying; if the live code can't satisfy the new rules, deploy them right before merging
 - Server logic (check-ins, admin actions) -> a Netlify function in `netlify/functions/` wrapped with `withAppCors`, with a test in `tests/` against the emulators (`npm run emulators`, `npm test`)
-- Android release -> bump `versionCode` above the highest used (last: 14, 1.3.1; versionName also sets the footer version), then build the signed bundle; install on a phone with `adb install -r` (that copy carries the upload key `dcc-release-key`; Play installs are re-signed with Google's app-signing key, SHA-1 `c6ebaad2…`, SHA-256 `AE:ED:CD:27…`, and both keys must be on the Firebase Android app and in `public/.well-known/assetlinks.json`)
+- Android release -> bump `versionCode` above the highest used (last: 15, 1.4.0; versionName also sets the footer version), then build the signed bundle; install on a phone with `adb install -r` (that copy carries the upload key `dcc-release-key`; Play installs are re-signed with Google's app-signing key, SHA-1 `c6ebaad2…`, SHA-256 `AE:ED:CD:27…`, and both keys must be on the Firebase Android app and in `public/.well-known/assetlinks.json`)
 
 Skill candidates (repeated work with no skill yet):
 - Android release (sync, bump version, build + verify signed AAB/APK)

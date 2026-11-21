@@ -50,14 +50,14 @@ const startNative = async (h: Handlers) => {
   await FirebaseMessaging.addListener('tokenReceived', e => void register(e.token));
   await FirebaseMessaging.addListener('notificationReceived', e => h.onForeground({ ...(e.notification.data as PushData), title: e.notification.title, body: e.notification.body }));
   await FirebaseMessaging.addListener('notificationActionPerformed', e => h.onOpen((e.notification.data ?? {}) as PushData));
-  let { receive } = await FirebaseMessaging.checkPermissions();
+  const { receive } = await FirebaseMessaging.checkPermissions();
   let asked = false;
   try {
     asked = localStorage.getItem(ASKED_KEY) === '1';
   } catch { /* ignore */ }
   if (receive !== 'granted' && receive !== 'denied' && !asked) {
     try { localStorage.setItem(ASKED_KEY, '1'); } catch { /* ignore */ }
-    receive = (await FirebaseMessaging.requestPermissions()).receive;
+    await FirebaseMessaging.requestPermissions();
   }
   // Registered even without permission: the bell still lists admin notifications.
   const { token } = await FirebaseMessaging.getToken();
