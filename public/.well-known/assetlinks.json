@@ -4,7 +4,10 @@
     "target": {
       "namespace": "android_app",
       "package_name": "com.danceclasscompanion.app",
-      "sha256_cert_fingerprints": ["EC:87:2A:92:84:6D:F4:86:E2:BE:41:00:71:BC:47:C5:31:9A:73:48:88:16:5F:60:11:4D:25:06:D3:77:3A:00"]
+      "sha256_cert_fingerprints": [
+        "EC:87:2A:92:84:6D:F4:86:E2:BE:41:00:71:BC:47:C5:31:9A:73:48:88:16:5F:60:11:4D:25:06:D3:77:3A:00",
+        "AE:ED:CD:27:42:46:73:42:D6:63:52:62:AA:61:A1:31:E6:C7:70:2A:37:1C:51:DF:64:DC:33:82:B3:FE:F0:36"
+      ]
     }
   }
 ]
