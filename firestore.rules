@@ -106,9 +106,12 @@ service cloud.firestore {
         && isValidName(request.resource.data.displayName)
         && request.resource.data.createdAt == request.time;
 
+      // Slice 6: the owner also sets chat notifications on/off and their mute list.
       allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
-        && isValidName(request.resource.data.displayName);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'chatNotify', 'muted'])
+        && isValidName(request.resource.data.displayName)
+        && (!('chatNotify' in request.resource.data) || request.resource.data.chatNotify is bool)
+        && (!('muted' in request.resource.data) || (request.resource.data.muted is list && request.resource.data.muted.size() <= 200));
 
       allow delete: if false;
 
@@ -166,6 +169,16 @@ service cloud.firestore {
     // Attendance (docs/spec.md). Class slots: anyone can read (a QR's landing
     // screen shows the slot before sign-in); only verified admins create/edit;
     // slots are archived, never deleted (old check-ins point at them).
+    // Slice 6: push devices and the admin-notification history are written only
+    // by server functions; admins read the history, nobody reads devices.
+    match /pushTokens/{id} {
+      allow read, write: if false;
+    }
+    match /notifications/{id} {
+      allow read: if isVerifiedAdmin();
+      allow write: if false;
+    }
+
     match /slots/{slotId} {
       allow read: if true;
       allow create: if isVerifiedAdmin()

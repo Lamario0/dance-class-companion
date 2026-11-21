@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.6.0",
+    "@capacitor-firebase/messaging": "^8.6.0",
     "@capacitor-mlkit/barcode-scanning": "^8.2.2",
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.2",

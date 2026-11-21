@@ -20,7 +20,7 @@ import { MenuButton, SideMenu } from './components/menu/SideMenu';
 import { LeaveGuardProvider } from './components/menu/LeaveGuard';
 import { apiUrl } from './services/platform';
 import { useAndroidBackButton } from './components/menu/backButton';
-import { NotebookPen, Users, QrCode, CalendarCheck, ClipboardList, GraduationCap } from 'lucide-react';
+import { NotebookPen, Users, QrCode, CalendarCheck, ClipboardList, GraduationCap, BellRing } from 'lucide-react';
 // The Notes page pulls in Firestore, so it loads on first visit.
 const NotesPage = React.lazy(() => import('./components/notes/NotesUI').then(m => ({ default: m.NotesPage })));
 
@@ -30,6 +30,7 @@ const StudentsPage = React.lazy(() => import('./components/admin/StudentsPage').
 const SlotsPage = React.lazy(() => import('./components/admin/SlotsPage').then(m => ({ default: m.SlotsPage })));
 const ClassAttendancePage = React.lazy(() => import('./components/admin/ClassAttendancePage').then(m => ({ default: m.ClassAttendancePage })));
 const LevelsPage = React.lazy(() => import('./components/admin/LevelsPage').then(m => ({ default: m.LevelsPage })));
+const NotificationsPage = React.lazy(() => import('./components/admin/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
 const AttendancePage = React.lazy(() => import('./components/attendance/AttendancePage').then(m => ({ default: m.AttendancePage })));
 const CheckInView = React.lazy(() => import('./components/attendance/CheckInView').then(m => ({ default: m.CheckInView })));
 
@@ -48,6 +49,7 @@ const MENU_PAGES = [
   { tab: Tab.ATTENDANCE, label: 'Attendance', title: 'My attendance', icon: CalendarCheck },
   { tab: Tab.CLASS_ATTENDANCE, label: 'Attendance', title: 'Attendance', icon: ClipboardList },
   { tab: Tab.LEVELS, label: 'Levels', title: 'Levels', icon: GraduationCap },
+  { tab: Tab.NOTIFICATIONS, label: 'Notify', title: 'Notifications', icon: BellRing },
   { tab: Tab.CHECKIN, label: 'Check in', title: 'Check in', icon: CalendarCheck },
 ];
 const MENU_TABS = MENU_PAGES.map(p => p.tab);
@@ -70,13 +72,16 @@ const LeaveMenuPageWhenNotAllowed: React.FC<{ tab: Tab; onLeave: () => void }> =
   useEffect(() => {
     if (loading) return;
     const needsUser = tab === Tab.NOTES || tab === Tab.ATTENDANCE;
-    const needsAdmin = tab === Tab.STUDENTS || tab === Tab.SLOTS || tab === Tab.CLASS_ATTENDANCE || tab === Tab.LEVELS;
+    const needsAdmin = tab === Tab.STUDENTS || tab === Tab.SLOTS || tab === Tab.CLASS_ATTENDANCE || tab === Tab.LEVELS || tab === Tab.NOTIFICATIONS;
     if ((needsUser && !user) || (needsAdmin && (!user || !isAdmin))) onLeave();
   }, [tab, loading, user, isAdmin, onLeave]);
   return null;
 };
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ToastProvider } from './components/ui/Toast';
+import { PushBridge } from './components/notify/PushBridge';
+import { requestChat } from './services/chatPresence';
+const NotificationBell = React.lazy(() => import('./components/notify/NotificationBell'));
 import { useAppLinks } from './services/appLinks';
 import { EmptyState, DancingDots } from './components/ui/Doodles';
 import { RotateCw } from 'lucide-react';
@@ -198,6 +203,16 @@ const App: React.FC = () => {
   const closeAccount = useCallback(() => setAccountOpen(false), []);
   useAndroidBackButton(menuOpen, closeMenu);
 
+  // Slice 6: notifications - the bell refreshes when one arrives; a tapped one opens its tab.
+  const [pushPulse, setPushPulse] = useState(0);
+  const bumpPush = useCallback(() => setPushPulse(p => p + 1), []);
+  const openChat = () => { requestChat(); navigateTo(Tab.ANNOUNCEMENTS); };
+  const openNotifyTab = (tab?: string) => {
+    if (tab === 'news') openChat();
+    else if (tab === 'classes') navigateTo(Tab.CLASSES);
+    else if (tab === 'media') navigateTo(Tab.MEDIA);
+  };
+
   const navigateTo = (tab: Tab) => {
     // We allow navigation without logging out the admin
     if (tab === activeTab) {
@@ -281,7 +296,7 @@ const App: React.FC = () => {
   const videoOfMonth = data?.videos.find(v => v.category === 'month');
   // fetchSheetData resolves to empty lists when the sheet can't be reached.
   // Attendance pages don't use the Sheets content: a QR scan must work even if the class data is slow or down.
-  const sheetFree = activeTab === Tab.CHECKIN || activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CLASS_ATTENDANCE || activeTab === Tab.LEVELS;
+  const sheetFree = activeTab === Tab.CHECKIN || activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CLASS_ATTENDANCE || activeTab === Tab.LEVELS || activeTab === Tab.NOTIFICATIONS;
   const loadFailed =
     !!data && !data.classes.length && !data.videos.length && !data.songs.length && !data.announcements.length;
   const current = navItems.find(i => i.tab === activeTab) ?? MENU_PAGES.find(p => p.tab === activeTab) ?? BASE_NAV[0];
@@ -293,6 +308,7 @@ const App: React.FC = () => {
      <MusicProvider songs={data?.songs ?? EMPTY_SONGS}>
       {/* Signing out on the Notes page returns to Classes. */}
       <ReportAdmin onChange={setAccountAdmin} />
+      <PushBridge onPulse={bumpPush} onOpen={d => (d.kind === 'chat' ? openChat() : openNotifyTab(d.tab))} />
       <LeaveMenuPageWhenNotAllowed tab={activeTab} onLeave={() => { notesDirty.current = false; setActiveTab(Tab.CLASSES); }} />
       <div id="app-shell" className="min-h-screen bg-surface-0 font-sans text-text-hi flex flex-col">
         {/* Header — slim on mobile: logo (secret triple-tap) + page title */}
@@ -320,6 +336,9 @@ const App: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <TopNav items={navItems} active={activeTab} onChange={navigateTo} />
+              <React.Suspense fallback={<span className="h-11 w-11" aria-hidden />}>
+                <NotificationBell pulse={pushPulse} onOpenChat={openChat} onOpenTab={openNotifyTab} />
+              </React.Suspense>
               <AccountButton onClick={() => setAccountOpen(true)} />
             </div>
           </div>
@@ -375,7 +394,7 @@ const App: React.FC = () => {
                   <StudentsPage />
                 </React.Suspense>
               )}
-              {(activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CLASS_ATTENDANCE || activeTab === Tab.LEVELS || activeTab === Tab.CHECKIN) && (
+              {(activeTab === Tab.SLOTS || activeTab === Tab.ATTENDANCE || activeTab === Tab.CLASS_ATTENDANCE || activeTab === Tab.LEVELS || activeTab === Tab.NOTIFICATIONS || activeTab === Tab.CHECKIN) && (
                 <React.Suspense
                   fallback={
                     <div className="flex items-center gap-3 py-6 text-text-mid">
@@ -388,6 +407,7 @@ const App: React.FC = () => {
                   {activeTab === Tab.ATTENDANCE && <AttendancePage />}
                   {activeTab === Tab.CLASS_ATTENDANCE && <ClassAttendancePage />}
                   {activeTab === Tab.LEVELS && <LevelsPage />}
+                  {activeTab === Tab.NOTIFICATIONS && <NotificationsPage />}
                   {activeTab === Tab.CHECKIN && (
                     <CheckInView
                       key={checkin.n}
@@ -481,6 +501,7 @@ const App: React.FC = () => {
         onAttendance={() => { setMenuOpen(false); navigateTo(Tab.ATTENDANCE); }}
         onClassAttendance={() => { setMenuOpen(false); navigateTo(Tab.CLASS_ATTENDANCE); }}
         onLevels={() => { setMenuOpen(false); navigateTo(Tab.LEVELS); }}
+        onNotifications={() => { setMenuOpen(false); navigateTo(Tab.NOTIFICATIONS); }}
         onScanned={openCheckin}
         // Focus the hamburger first, so the account sheet returns focus there (not to the gone drawer item).
         onAccount={() => { menuButtonRef.current?.focus(); setMenuOpen(false); setAccountOpen(true); }}

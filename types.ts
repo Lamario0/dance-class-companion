@@ -53,6 +53,8 @@ export enum Tab {
   CLASS_ATTENDANCE = 'CLASS_ATTENDANCE',
   /** admins: levels, promotions, guest links (attendance slice 5) */
   LEVELS = 'LEVELS',
+  /** admin: send notifications to app users (slice 6) */
+  NOTIFICATIONS = 'NOTIFICATIONS',
   /** the screen a class QR opens (/checkin/<slotId>) */
   CHECKIN = 'CHECKIN'
 }

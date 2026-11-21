@@ -25,7 +25,7 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 // Offline cache: notes written in a studio with bad signal are kept on the
 // device and sync when the connection is back. Falls back to memory-only where
 // IndexedDB isn't available (some private-browsing modes).
