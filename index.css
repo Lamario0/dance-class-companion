@@ -350,3 +350,10 @@ html.sheet-open #app-shell {
 @media (prefers-reduced-motion: reduce) {
   .enter-right, .enter-left { animation: fade 200ms ease-out both !important; }
 }
+
+/* Enlarged class QR (admin Class slots) */
+@keyframes qr-pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+.qr-pop { animation: qr-pop 420ms var(--ease-spring) both; }
+@media (prefers-reduced-motion: reduce) {
+  .qr-pop { animation: fade 200ms ease-out both !important; }
+}

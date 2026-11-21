@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tab } from '../types';
-import { Footprints, Clapperboard, Megaphone, ShieldCheck } from 'lucide-react';
+import { Footprints, Clapperboard, Megaphone, Calculator } from 'lucide-react';
 import { useAnySheetOpen } from './ui/BottomSheet';
 
 export interface NavItem {
@@ -15,7 +15,7 @@ export const BASE_NAV: NavItem[] = [
   { tab: Tab.MEDIA, label: 'Media', title: 'Videos & music', icon: Clapperboard },
   { tab: Tab.ANNOUNCEMENTS, label: 'News', title: 'Studio news', icon: Megaphone },
 ];
-export const ADMIN_NAV: NavItem = { tab: Tab.CALCULATOR, label: 'Admin', title: 'Instructor tools', icon: ShieldCheck };
+export const ADMIN_NAV: NavItem = { tab: Tab.CALCULATOR, label: 'Calculator', title: 'Dance-party calculator', icon: Calculator };
 
 interface NavProps {
   items: NavItem[];

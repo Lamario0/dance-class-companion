@@ -6,12 +6,13 @@
 // worksheet; the class is picked from the Classes worksheet; what the sheet says
 // is shown (it wins).
 import React, { useEffect, useState } from 'react';
-import { Archive, ArchiveRestore, Download, Pencil, Plus, Printer, QrCode, RefreshCw, RotateCw, ShieldCheck } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Check, Download, Pencil, Plus, Printer, QrCode, RefreshCw, RotateCw, ShieldCheck, X } from 'lucide-react';
 import { useAccount } from '../auth/AuthProvider';
 import { useToast } from '../ui/Toast';
 import { BottomSheet } from '../ui/BottomSheet';
 import { DancingDots, EmptyState } from '../ui/Doodles';
-import { checkinLink, createSlot, subscribeSlots, updateSlot, withSheet, MAX_SLOT_TEXT, type Slot } from '../../services/attendanceService';
+import { QrPopout } from './QrPopout';
+import { checkinLink, createSlot, reorderSlots, subscribeSlots, updateSlot, withSheet, MAX_SLOT_TEXT, type Slot } from '../../services/attendanceService';
 import { authedFetch } from '../../services/authService';
 import { useSyllabus } from '../../services/useSyllabus';
 
@@ -46,6 +47,7 @@ const SlotCard: React.FC<{ slot: Slot; onEdit: () => void }> = ({ slot, onEdit }
   const [qrFailed, setQrFailed] = useState(false);
   const [qrAttempt, setQrAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [big, setBig] = useState(false);
   const link = checkinLink(slot.id);
 
   useEffect(() => {
@@ -79,7 +81,9 @@ const SlotCard: React.FC<{ slot: Slot; onEdit: () => void }> = ({ slot, onEdit }
         {!slot.archived && (
           <div className="mx-auto grid h-44 w-44 shrink-0 place-items-center rounded-[var(--radius-sm)] bg-white p-2 sm:mx-0 sm:h-36 sm:w-36">
             {png ? (
-              <img src={png} alt={`QR code for ${slot.label}`} className="h-full w-full" />
+              <button type="button" onClick={() => setBig(true)} aria-label={`Enlarge the QR code for ${slot.label}`} className="press h-full w-full cursor-zoom-in">
+                <img src={png} alt={`QR code for ${slot.label}`} className="h-full w-full" />
+              </button>
             ) : qrFailed ? (
               <button type="button" onClick={() => setQrAttempt(n => n + 1)} className="press flex min-h-11 flex-col items-center gap-1 px-2 text-center text-[14px] font-semibold text-black">
                 <RotateCw className="h-5 w-5" /> Couldn't draw the QR. Retry
@@ -126,6 +130,7 @@ const SlotCard: React.FC<{ slot: Slot; onEdit: () => void }> = ({ slot, onEdit }
           </div>
         </div>
       </div>
+      {big && png && <QrPopout png={png} label={slot.label} title={slot.title} onClose={() => setBig(false)} />}
     </li>
   );
 };
@@ -144,6 +149,9 @@ export const SlotsPage: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [sheetVersion, setSheetVersion] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // Reorder mode: the active slots' ids in their new order (null = not reordering).
+  const [draft, setDraft] = useState<string[] | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
   const syllabus = useSyllabus(sheetVersion);
   // Class titles from the Classes worksheet, grouped by dance.
   const byDance = new Map<string, string[]>();
@@ -202,6 +210,30 @@ export const SlotsPage: React.FC = () => {
   const active = shown.filter(s => !s.archived);
   const archived = shown.filter(s => s.archived);
 
+  const byId = new Map(active.map(s => [s.id, s]));
+  // Slots added or archived while reordering: keep the draft to the current active ones.
+  const ordered = draft ? [...draft.filter(id => byId.has(id)), ...active.map(s => s.id).filter(id => !draft.includes(id))].map(id => byId.get(id)!) : active;
+  const move = (i: number, by: number) => {
+    const ids = ordered.map(s => s.id);
+    const j = i + by;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    setDraft(ids);
+  };
+  const saveOrder = async () => {
+    setSavingOrder(true);
+    try {
+      await reorderSlots(ordered.map(s => s.id));
+      toast.show('Order saved.', 'success');
+      setDraft(null);
+    } catch (e: any) {
+      console.error(e);
+      toast.show(e?.message || "Couldn't save the order. Try again.", 'error');
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -209,12 +241,22 @@ export const SlotsPage: React.FC = () => {
           <p className="eyebrow flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Admin</p>
           <h2 className="mt-1 text-[28px] font-extrabold leading-tight tracking-tight md:text-4xl">Class slots</h2>
         </div>
+        {draft ? (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setDraft(null)} disabled={savingOrder} className="btn-secondary press min-h-11"><X className="h-4 w-4" /> Cancel</button>
+            <button type="button" onClick={saveOrder} disabled={savingOrder} className="btn-primary press min-h-11"><Check className="h-4 w-4" /> {savingOrder ? 'Saving…' : 'Save order'}</button>
+          </div>
+        ) : (
         <div className="flex flex-wrap gap-2">
+          {active.length > 1 && (
+            <button type="button" onClick={() => setDraft(active.map(s => s.id))} className="btn-secondary press min-h-11"><ArrowUpDown className="h-4 w-4" /> Reorder</button>
+          )}
           <button type="button" onClick={refresh} disabled={refreshing} className="btn-secondary press min-h-11">
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Refresh class list
           </button>
           <button type="button" onClick={() => open('new')} className="btn-primary press min-h-11"><Plus className="h-4 w-4" /> New slot</button>
         </div>
+        )}
       </div>
 
       {failed ? (
@@ -229,6 +271,23 @@ export const SlotsPage: React.FC = () => {
           <EmptyState doodle="sparkle" title="No class slots yet." body="Make one for each weekly class time. Each gets a QR code students scan to check in."
             action={<button type="button" onClick={() => open('new')} className="btn-primary press min-h-11"><QrCode className="h-4 w-4" /> Make the first slot</button>} />
         </div>
+      ) : draft ? (
+        <>
+          <p className="mb-3 text-text-mid">Move slots up or down, then save. This is the order admins and the check-in lists see.</p>
+          <ol className="flex flex-col gap-2">
+            {ordered.map((s, i) => (
+              <li key={s.id} className="card flex items-center gap-3 p-3 transition-transform">
+                <span className="w-6 shrink-0 text-center text-[15px] font-bold text-text-lo">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-text-lo">{s.label}</p>
+                  <p className="truncate text-[17px] font-bold text-text-hi">{s.title}</p>
+                </div>
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || savingOrder} aria-label={`Move ${s.label} up`} className="btn-secondary press !min-h-11 !min-w-11 !px-0 disabled:opacity-30"><ArrowUp className="h-5 w-5" /></button>
+                <button type="button" onClick={() => move(i, 1)} disabled={i === ordered.length - 1 || savingOrder} aria-label={`Move ${s.label} down`} className="btn-secondary press !min-h-11 !min-w-11 !px-0 disabled:opacity-30"><ArrowDown className="h-5 w-5" /></button>
+              </li>
+            ))}
+          </ol>
+        </>
       ) : (
         <>
           <ul className="flex flex-col gap-4">
