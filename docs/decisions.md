@@ -23,6 +23,11 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - A signed-in verified admin account opens the calculator (logo triple-tap) without the passcode; signed out, the passcode is still asked. Signing the admin out leaves the calculator. The calculator itself is unchanged.
 - Android 1.3.1 (versionCode 13). The footer shows "Version <versionName>", read from android/app/build.gradle at build time, so the website and app show the same number.
 
+## 2026-11-21 - Class cards follow the app's slots
+
+- The Classes tab shows one card per active slot in the app (Firestore `slots`), in the Reorder order, so 5 active slots = 5 cards. Patterns and notes still come from the Classes worksheet; the sheet's label/title win as on Class slots. A slot whose class has no patterns shows "Patterns TBD".
+- Until the slots load, or if they can't be read, the Slots worksheet's cards are shown (the old behaviour).
+
 ## 2026-11-21 - QR pop-out, Calculator tab, slot order
 
 - Tapping a slot's QR (Class slots) enlarges it over a dark, blurred screen (the app root is blurred too, not only a backdrop filter) so a phone can't scan a neighbouring code. Tap, X, Escape or Android back closes it.
