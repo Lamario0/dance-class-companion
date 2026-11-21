@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { authedFetch } from './authService';
+import { sortSlots } from './slotOrder';
 import { patchSyllabusSlot, type Syllabus } from './dataService';
 
 export const MAX_SLOT_TEXT = 60;
@@ -26,6 +27,8 @@ export interface Slot {
   label: string;
   title: string;
   archived: boolean;
+  /** display position set by an admin (none = after the ordered ones, oldest first) */
+  order?: number;
 }
 
 export interface Checkin {
@@ -57,7 +60,10 @@ export const getSlot = async (slotId: string): Promise<Slot | null> => {
 export const subscribeSlots = (onChange: (slots: Slot[]) => void, onError: (e: FirestoreError) => void) =>
   onSnapshot(
     query(collection(db, 'slots'), orderBy('createdAt', 'asc')),
-    snap => onChange(snap.docs.map(s => ({ id: s.id, label: s.data().label, title: s.data().title, archived: s.data().archived === true }))),
+    snap => onChange(sortSlots(snap.docs.map(s => {
+      const d = s.data();
+      return { id: s.id, label: d.label, title: d.title, archived: d.archived === true, ...(typeof d.order === 'number' ? { order: d.order } : {}) };
+    }))),
     onError,
   );
 
@@ -77,6 +83,10 @@ export const updateSlot = (id: string, patch: Partial<Pick<Slot, 'label' | 'titl
   if (typeof patch.title === 'string') clean.title = patch.title.trim();
   return saveSlot(clean);
 };
+
+/** Save the display order of these slots (ids, top first). */
+export const reorderSlots = (ids: string[]) =>
+  authedFetch('/api/admin/slot', { method: 'POST', body: JSON.stringify({ order: ids }) }) as Promise<{ status: string; count: number }>;
 
 /** The slot as the Slots worksheet has it (the sheet wins when it has a row). */
 export const withSheet = <T extends { id: string; label: string; title: string }>(slot: T, s: Syllabus | null): T => {

@@ -77,7 +77,7 @@ import { BottomSheet } from './components/ui/BottomSheet';
 import { ToastProvider } from './components/ui/Toast';
 import { useAppLinks } from './services/appLinks';
 import { EmptyState, DancingDots } from './components/ui/Doodles';
-import { LogOut, RotateCw } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
 
 const Logo: React.FC<{ className?: string }> = ({ className = '' }) => (
   <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -219,12 +219,6 @@ const App: React.FC = () => {
   };
   useAppLinks(openCheckin);
 
-
-  const handleLogout = () => {
-    setPasscodeOk(false);
-    setDirection('left');
-    setActiveTab(Tab.CLASSES);
-  };
 
   const handleLogoClick = () => {
     const newCount = logoClicks + 1;
@@ -412,16 +406,7 @@ const App: React.FC = () => {
                 </React.Suspense>
               )}
               {activeTab === Tab.CALCULATOR && isAuthenticated && (
-                <>
-                  <div className="mx-auto mb-6 flex max-w-4xl items-center justify-between gap-3">
-                    <p className="text-text-lo text-[15px]">Instructor mode is on.</p>
-                    <button onClick={handleLogout} className="btn-secondary press !min-h-11 shrink-0 whitespace-nowrap text-rose-300 hover:!bg-rose-500/15">
-                      <LogOut className="h-4 w-4" />
-                      Exit admin
-                    </button>
-                  </div>
-                  <CalculatorView />
-                </>
+                <CalculatorView />
               )}
             </div>
           )}

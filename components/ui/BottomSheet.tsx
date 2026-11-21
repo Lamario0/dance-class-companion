@@ -27,6 +27,19 @@ export const closeTopSheet = () => {
   return true;
 };
 
+/** Put another overlay on the same stack (Escape / Android back close it first). Returns its remover. */
+export const pushOverlay = (close: () => void) => {
+  const entry = { close };
+  sheetStack.push(entry);
+  return {
+    isTop: () => sheetStack[sheetStack.length - 1] === entry,
+    remove: () => {
+      const i = sheetStack.indexOf(entry);
+      if (i >= 0) sheetStack.splice(i, 1);
+    },
+  };
+};
+
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 

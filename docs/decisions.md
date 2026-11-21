@@ -18,6 +18,12 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - A signed-in verified admin account opens the calculator (logo triple-tap) without the passcode; signed out, the passcode is still asked. Signing the admin out leaves the calculator. The calculator itself is unchanged.
 - Android 1.3.1 (versionCode 13). The footer shows "Version <versionName>", read from android/app/build.gradle at build time, so the website and app show the same number.
 
+## 2026-11-21 - QR pop-out, Calculator tab, slot order
+
+- Tapping a slot's QR (Class slots) enlarges it over a dark, blurred screen (the app root is blurred too, not only a backdrop filter) so a phone can't scan a neighbouring code. Tap, X, Escape or Android back closes it.
+- The header/bottom-bar tab for the calculator is labelled "Calculator" (was "Admin"); the "Instructor mode is on." line and "Exit admin" button are gone. A passcode session now lasts until the page reloads. CalculatorView itself is unchanged.
+- Slots have an optional `order` (written only by `/api/admin/slot { order: [ids] }`); the app sorts by it, and slots without one follow in creation order. The sheet's row order is not changed.
+
 ## 2026-11-19 - Slice 5 (levels) spec and build
 
 - Levels per dance: 100 / 200 / Advanced Concepts. 100->200 needs 12 classes at 100 level (after AB where the dance has one) and 4 months; 200->ADV needs 6 months and 24 200-level classes; ADV is invite only. Targets are editable on the admin Levels page.

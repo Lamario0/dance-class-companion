@@ -1,6 +1,7 @@
 // Admin only (attendance slice 3A): create or edit a class slot, keeping its row
 // in the Slots worksheet the same. POST { label, title } creates;
-// POST { id, label?, title?, archived? } edits. If the sheet can't be reached the
+// POST { id, label?, title?, archived? } edits; POST { order: [id, ...] } sets the
+// display order (app only; the sheet's row order is left alone). If the sheet can't be reached the
 // slot is saved anyway and marked `sheetPending`; the 15-minute job writes it.
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminConfigured, adminDb, json, requireAdmin } from '../lib/firebaseAdmin.mts';
@@ -21,8 +22,21 @@ export default withAppCors(async (req: Request, _context?: unknown) => {
   } catch {
     return json({ error: 'Invalid request body.' }, 400);
   }
-  const { id, label, title, archived } = body ?? {};
+  const { id, label, title, archived, order } = body ?? {};
   const db = adminDb();
+  if (order !== undefined) {
+    if (!Array.isArray(order) || order.length === 0 || order.length > 300 || new Set(order).size !== order.length
+      || !order.every((o: unknown) => typeof o === 'string' && SLOT_ID.test(o))) {
+      return json({ error: 'Invalid request body.' }, 400);
+    }
+    const refs = order.map((o: string) => db.doc(`slots/${o}`));
+    const snaps = await db.getAll(...refs);
+    if (snaps.some(s => !s.exists)) return json({ error: "That slot doesn't exist." }, 404);
+    const batch = db.batch();
+    refs.forEach((r, i) => batch.update(r, { order: i }));
+    await batch.commit();
+    return json({ status: 'ordered', count: order.length });
+  }
   const bad = (t: unknown) => t !== undefined && !isSlotText(t);
   if (bad(label) || bad(title)) return json({ error: 'Day/time and class must be 1-60 characters.' }, 400);
   if (archived !== undefined && typeof archived !== 'boolean') return json({ error: 'Invalid request body.' }, 400);
