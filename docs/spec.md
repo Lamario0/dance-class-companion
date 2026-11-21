@@ -34,6 +34,108 @@ Only the current slice is specced. Later ones are specced when reached.
 | 3 | Syllabus-driven classes and sheet sync: class cards come from a Classes worksheet built from the syllabus; slots in a Slots worksheet both ways (3A); every check-in becomes an Attendance row (3B) | done (live 2026-11-18) |
 | 4 | Android: scanning a class QR opens the app (app links), plus a "Scan to check in" scanner in the menu; ships as 1.3.0 | done (verified on phone 2026-11-18; 1.3.0 awaiting Play upload) |
 | 5 | Levels and progress: per-dance levels (100 / 200 / Advanced Concepts), progress shown to students, admin confirms moves up, guests linkable to accounts | done (live 2026-11-19) |
+| 6 | Notifications: phone/browser alerts and an in-app bell; chat messages notify every account (opt-out); admins send notifications to Android app users (all, or a dance/level group), with a sent history; signed-in users can mute other chat users; ships as Android 1.4.0 | building (spec approved 2026-11-21) |
+
+---
+
+## Slice 6 - Notifications
+
+### What it does
+
+- **Two kinds of alert:** system notifications (the phone's notification
+  shade, or a browser pop-up) and a **bell** in the app header that lists
+  recent notifications with an unread dot.
+- **Chat messages (web and Android app):** when someone posts in the
+  community chat, every signed-in account gets a notification ("Name: first
+  line of the message"), except the person who posted and anyone looking at
+  the chat right then. It is **on by default**; each account can turn it off
+  ("Chat messages" switch in the account sheet). Tapping it opens the chat.
+- **Admin notifications (Android app only):** a new admin page,
+  **Notifications**, where an admin writes a title and a message, picks who
+  gets it - **all app users** (signed in or not) or a **group** (a dance and
+  level, e.g. "WCS - 200 level"; signed-in app users only) - optionally
+  picks a tab to open, and sends. Before sending it shows how many devices
+  will get it.
+- **Sent history:** the admin page lists what was sent, when, by whom, to
+  whom, and how many devices got it. App users see the admin notifications
+  meant for them in the bell.
+- **Mute (signed in):** a signed-in user can mute another chat user from
+  that person's message (long-press or the message menu): no notifications
+  from them, and their messages collapse to "Muted message - tap to show".
+  Admins can't be muted. Guests are muted by the name they post under (a
+  guest who changes name isn't muted). Muting only affects the person who
+  muted; a "Muted people" list in the account sheet unmutes. Nobody is told
+  they were muted.
+
+### Defaults to confirm (Claude's recommendation; say if any is wrong)
+
+1. **Delivery:** Firebase Cloud Messaging for both the web (browser push via
+   the existing service worker) and the Android app
+   (`@capacitor-firebase/messaging`). Sending is done by Netlify functions
+   with the existing service account; no new server.
+2. **How chat triggers a notification:** after a message is saved, the
+   poster's app calls `/api/chat-notify` with the message id. The server
+   checks the message exists, is under 2 minutes old and hasn't been sent
+   yet (marked once, so it can't be triggered twice), then sends. If the
+   poster's app closes before that call, that one message isn't notified.
+   (The alternative is a Firebase Cloud Function trigger: always fires, but
+   adds a second server to deploy.) Guest posts notify too.
+3. **No flooding:** each chat notification replaces the previous one on the
+   device (one "chat" notification at a time showing the latest message),
+   not a pile of separate alerts.
+4. **Asking permission:** the Android app asks on first launch after the
+   update (Android 13+ requires it). The web asks only when the user taps
+   "Turn on notifications" (on the bell or the account sheet), because
+   browsers block unprompted asks. A user who says no gets nothing pushed
+   but still sees the bell.
+5. **Devices are registered by the server:** `pushTokens/{token}` with
+   platform (android or web), the uid when signed in, and when it was last
+   seen. Written only through `/api/push/register`; tokens that stop working
+   are removed when a send fails. Signing out keeps the device as an
+   "all app users" device but drops the uid.
+6. **Group = dance + level** from slice 5's levels (`levels/{uid}`). Anyone
+   without a stored level in that dance counts as 100.
+7. **Bell contents:** admin notifications meant for this user/device (last
+   30 days) and one "New messages in chat" row with a count since they last
+   opened the chat. On the web, the bell shows chat only (admin sends are
+   app-only).
+8. **History kept 90 days** (`notifications/{id}`: title, body, audience,
+   tab, sentBy, sentAt, device count), deleted by a TTL policy like chat.
+9. **iPhone:** web push works only when the site is added to the home screen
+   (iOS 16.4+); no iOS app (no Apple developer account yet).
+10. **Mutes are stored per account** (`users/{uid}` private field `muted`:
+    uids and guest names, up to 200), readable and writable only by that
+    account; the chat-notify function skips anyone who muted the poster.
+    Admins are exempt by role (their messages carry `role: admin`, and the
+    server checks the admin claim), not by a rule on the list.
+11. **Android release:** 1.4.0 / versionCode 15, adds the notification
+    permission and a white notification icon; built and verified after the
+    slice is done.
+
+### Done means
+
+| # | Criterion | Checked by |
+|---|---|---|
+| 1 | A chat post notifies every other registered account device with chat notifications on, not the poster's, and not an account that turned them off | function test against the emulators (FCM send stubbed) |
+| 2 | `/api/chat-notify` sends at most once per message, refuses messages over 2 minutes old or missing, and works for guest posts | function test |
+| 3 | An admin sends to "all app users" and only Android devices get it (web devices don't); to a group, only signed-in app users at that dance and level get it; a student is refused | function test |
+| 4 | The admin page shows the device count before sending and the sent history after; the bell lists admin notifications meant for the user and the chat count | browser preview at 375 px and desktop against the emulators |
+| 5 | The "Chat messages" switch turns chat notifications off and on for the account | function test + browser preview |
+| 6 | On the web, "Turn on notifications" asks the browser, registers the device, and a chat post from another account shows a browser notification; none while the chat is open | real browser (Chrome) against the live project, by Lamarr |
+| 7 | On the phone (1.4.0): permission is asked once; a chat post and an admin send each arrive with the app closed and open the right screen when tapped | Lamarr's phone, Claude watches logcat |
+| 11 | A signed-in user mutes a member and a guest: their messages collapse (tap shows), notifications from them stop; unmuting restores both; an admin's message has no Mute option, and an admin's uid put in the list by hand has no effect (admin messages always show and always notify) | function test + rules test + browser preview |
+| 8 | Rules: nobody writes `pushTokens` or `notifications` from the browser; users read only the notifications meant for them | rules test on the emulator |
+| 9 | All tests pass; `npm run build` passes, main bundle under 330 kB; the calculator is untouched | test and build output, diff |
+| 10 | A signed 1.4.0 / versionCode 15 AAB and APK are built and verified (apksigner, jarsigner) | build + verify output |
+
+### Reference to match
+
+The existing admin pages (Levels, Class slots) for layout; the chat's
+existing unread handling, if any, for the bell's chat row.
+
+### Second check
+
+Fresh-context reviewer subagent with this spec, the criteria and the diff.
 
 ---
 
