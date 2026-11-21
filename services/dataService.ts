@@ -293,12 +293,12 @@ export const patchSyllabusSlot = (slot: SheetSlot) => {
   });
 };
 
-/** One home-screen card per active slot, in worksheet order. */
-export const syllabusClasses = (s: Syllabus): DanceClass[] =>
-  s.slots
+/** One home-screen card per active slot, in the order given; patterns and notes from the Classes worksheet. */
+export const slotCards = (slots: SheetSlot[], classes: Map<string, SyllabusClass>): DanceClass[] =>
+  slots
     .filter(slot => !slot.archived && slot.title)
     .map(slot => {
-      const cls = s.classes.get(slot.title);
+      const cls = classes.get(slot.title);
       return {
         id: `slot-${slot.id}`,
         name: cleanPattern(slot.title),
@@ -307,3 +307,6 @@ export const syllabusClasses = (s: Syllabus): DanceClass[] =>
         notes: cls?.notes ?? '',
       };
     });
+
+/** The worksheet's cards (fallback when the app's slots can't be read): Slots rows in worksheet order. */
+export const syllabusClasses = (s: Syllabus): DanceClass[] => slotCards(s.slots, s.classes);

@@ -9,6 +9,8 @@ const AnnouncementsView = React.lazy(() =>
   import('./components/AnnouncementsView').then(m => ({ default: m.AnnouncementsView })),
 );
 import { CalculatorView } from './components/CalculatorView';
+import { useSlotCards } from './services/useSlotCards';
+import type { DanceClass } from './types';
 import { BottomTabBar, TopNav, BASE_NAV, ADMIN_NAV } from './components/Navigation';
 import { MusicProvider } from './components/music/MusicPlayer';
 import { AuthProvider } from './components/auth/AuthProvider';
@@ -114,6 +116,8 @@ const LoadingSkeleton: React.FC = () => (
   </div>
 );
 
+const NO_CLASSES: DanceClass[] = [];
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(CHECKIN_SLOT !== null ? Tab.CHECKIN : Tab.CLASSES);
   // Which slot the check-in screen is for: from the address bar on the web, or (slice 4,
@@ -127,6 +131,8 @@ const App: React.FC = () => {
   }, [activeTab]);
   const [direction, setDirection] = useState<'left' | 'right'>('right');
   const [data, setData] = useState<AppData | null>(null);
+  // One card per active class slot (falls back to the worksheet's cards until slots load).
+  const classCards = useSlotCards(data?.classes ?? NO_CLASSES);
   const [loading, setLoading] = useState(true);
 
   // Hidden Calculator States
@@ -340,7 +346,7 @@ const App: React.FC = () => {
           ) : (
             <div key={activeTab} className={direction === 'right' ? 'enter-right' : 'enter-left'}>
               {activeTab === Tab.CLASSES && (
-                <ClassesView classes={data.classes} videoOfMonth={videoOfMonth} onRequireAccount={() => setAccountOpen(true)} />
+                <ClassesView classes={classCards} videoOfMonth={videoOfMonth} onRequireAccount={() => setAccountOpen(true)} />
               )}
               {activeTab === Tab.MEDIA && (
                 <MediaView videos={data.videos} songs={data.songs} />
