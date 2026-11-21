@@ -293,6 +293,12 @@ export const patchSyllabusSlot = (slot: SheetSlot) => {
   });
 };
 
+/** The slot as the Slots worksheet has it (the sheet wins when it has a row). */
+export const withSheet = <T extends { id: string; label: string; title: string }>(slot: T, s: Syllabus | null): T => {
+  const row = s?.slots.find(x => x.id === slot.id);
+  return row ? { ...slot, label: row.label || slot.label, title: row.title || slot.title } : slot;
+};
+
 /** One home-screen card per active slot, in the order given; patterns and notes from the Classes worksheet. */
 export const slotCards = (slots: SheetSlot[], classes: Map<string, SyllabusClass>): DanceClass[] =>
   slots

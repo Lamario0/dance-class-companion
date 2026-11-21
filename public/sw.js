@@ -36,3 +36,50 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
   );
 });
+
+// --- Push notifications (slice 6) ---------------------------------------------
+// The server sends data-only web pushes ({ data: { kind, tab, title, body, tag } }).
+// If a window of the site is focused, it decides (no alert while the chat is
+// open; a toast otherwise); if not, we show a system notification. Chat alerts
+// share one tag, so a new one replaces the last instead of piling up.
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (e) {
+    payload = {};
+  }
+  const d = payload.data || payload;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      const focused = wins.find((w) => w.focused && w.visibilityState === 'visible');
+      if (focused) {
+        focused.postMessage({ type: 'push', data: d });
+        return undefined;
+      }
+      return self.registration.showNotification(d.title || 'Dance Class Companion', {
+        body: d.body || '',
+        tag: d.tag || undefined,
+        renotify: !!d.tag,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        data: d,
+      });
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const d = event.notification.data || {};
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      const win = wins.find((w) => new URL(w.url).origin === self.location.origin);
+      if (win) {
+        win.postMessage({ type: 'open', data: d });
+        return win.focus();
+      }
+      return self.clients.openWindow('/?open=' + encodeURIComponent(d.tab || 'news'));
+    })
+  );
+});

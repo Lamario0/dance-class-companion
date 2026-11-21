@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Announcement } from '../types';
-import { MessageCircle, Trash2, Edit2, Save, X, Reply, ChevronDown, Send, CalendarDays, BadgeCheck, ShieldCheck } from 'lucide-react';
+import { MessageCircle, Trash2, Edit2, Save, X, Reply, ChevronDown, Send, CalendarDays, BadgeCheck, ShieldCheck, BellOff, EyeOff } from 'lucide-react';
 import { Segmented } from './ui/Segmented';
 import { EmptyState } from './ui/Doodles';
 import { useToast } from './ui/Toast';
@@ -10,6 +10,9 @@ import {
   ChatThread, ChatRole, subscribeToChat, postChatMessage, buildThreads, editChatMessage, deleteChatMessage, MAX_AUTHOR, MAX_TEXT,
 } from '../services/chatService';
 import { useAccount } from './auth/AuthProvider';
+import { markChatSeen, setChatVisible, takeChatRequest } from '../services/chatPresence';
+import { usePrefs, mute as muteSomeone } from '../services/prefsService';
+import { muteKey } from '../services/mutes';
 
 // UI-only: remember the chat name locally after the first post.
 const NAME_KEY = 'dcc_chat_name';
@@ -86,7 +89,8 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   const [newText, setNewText] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // UI-only state
-  const [view, setView] = useState<'updates' | 'chat'>('updates');
+  // A tapped chat notification opens straight on the chat.
+  const [view, setView] = useState<'updates' | 'chat'>(() => (takeChatRequest() ? 'chat' : 'updates'));
   const [savedName, setSavedName] = useState(readSavedName);
   const [editingName, setEditingName] = useState(false);
   const toast = useToast();
@@ -109,6 +113,23 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
       root.style.setProperty('--chat-h', '0px');
     };
   }, [view, isDesktop]);
+
+  // Slice 6: no chat alerts while the chat is on screen; "seen" for the bell's count.
+  useEffect(() => {
+    setChatVisible(view === 'chat');
+    return () => setChatVisible(false);
+  }, [view]);
+  useEffect(() => {
+    const open = () => { if (takeChatRequest()) setView('chat'); };
+    window.addEventListener('dcc:open-chat', open);
+    return () => window.removeEventListener('dcc:open-chat', open);
+  }, []);
+  useEffect(() => {
+    if (view !== 'chat') return;
+    const onVis = () => { if (document.visibilityState === 'visible') markChatSeen(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [view]);
 
   // Live chat from Firestore (this quarter only — see services/chatService.ts).
   useEffect(() => {
@@ -136,6 +157,26 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   const role: ChatRole = isAdmin ? 'admin' : 'member';
   const postAs = member ? { uid: user!.uid, role } : undefined;
   const canModify = (c: Comment) => !c.deleted && (isAdmin || (member && c.uid === user!.uid));
+
+  // Slice 6: signed-in members mute other people for themselves (never admins).
+  const prefs = usePrefs(member ? user!.uid : null);
+  const mutedKeys = new Set(prefs.muted.map(m => m.k));
+  const muting: Muting | null = member
+    ? {
+        isMuted: c => !c.deleted && c.role !== 'admin' && mutedKeys.has(muteKey(c)),
+        canMute: c => !c.deleted && c.role !== 'admin' && c.uid !== user!.uid && !mutedKeys.has(muteKey(c)),
+        onMute: async c => {
+          if (!window.confirm(`Mute ${c.author}? You won't get notifications from them and their messages will be hidden. Unmute any time in your account.`)) return;
+          try {
+            await muteSomeone(user!.uid, { k: muteKey(c), n: c.author }, prefs.muted);
+            toast.show(`${c.author} is muted.`, 'success');
+          } catch (err: any) {
+            console.error(err);
+            toast.show(err?.message?.startsWith('You can') ? err.message : "Couldn't mute. Please try again.", 'error');
+          }
+        },
+      }
+    : null;
 
   const handleDelete = async (comment: Comment) => {
     if (!window.confirm('Delete this message?')) return;
@@ -360,6 +401,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
                         onDelete={handleDelete}
                         onEdit={handleEdit}
                         onReply={handleReply}
+                        muting={muting}
                         depth={0}
                         defaultName={savedName}
                       />
@@ -448,6 +490,12 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({ announceme
   );
 };
 
+interface Muting {
+  isMuted: (c: Comment) => boolean;
+  canMute: (c: Comment) => boolean;
+  onMute: (c: Comment) => void;
+}
+
 interface CommentItemProps {
   comment: Comment;
   /** may the viewer edit/delete this message (own message as a member, or any as admin) */
@@ -457,13 +505,17 @@ interface CommentItemProps {
   onDelete: (c: Comment) => void;
   onEdit: (id: string, text: string) => Promise<boolean>;
   onReply: (parentId: string, author: string, text: string) => Promise<boolean>;
+  /** signed-in members only (slice 6) */
+  muting: Muting | null;
   depth: number;
   /** UI-only: prefill a guest's reply name with the remembered chat name */
   defaultName?: string;
 }
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, canModify, memberName, onDelete, onEdit, onReply, depth, defaultName = '' }) => {
+const CommentItem: React.FC<CommentItemProps> = ({ comment, canModify, memberName, onDelete, onEdit, onReply, muting, depth, defaultName = '' }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const muted = !!muting?.isMuted(comment) && !revealed;
   const [editText, setEditText] = useState(comment.text);
   const [isReplying, setIsReplying] = useState(false);
   const [replyAuthor, setReplyAuthor] = useState(defaultName);
@@ -554,6 +606,13 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, canModify, memberNam
                 </button>
               </div>
             )}
+            {muting?.canMute(comment) && !isEditing && (
+              <div className="-mr-2 -mt-2 flex items-center opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                <button onClick={() => muting.onMute(comment)} aria-label={`Mute ${comment.author}`} data-tip="Mute" className="tip press grid h-11 w-11 place-items-center rounded-full text-text-lo hover:bg-surface-2 hover:text-amber-300">
+                  <BellOff className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
 
           {isEditing ? (
@@ -573,6 +632,10 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, canModify, memberNam
             </div>
           ) : comment.deleted ? (
             <p className="mt-0.5 italic text-text-lo">This message was deleted</p>
+          ) : muted ? (
+            <button type="button" onClick={() => setRevealed(true)} className="press mt-1 inline-flex min-h-11 items-center gap-2 rounded-full bg-surface-2 px-3 text-[14px] text-text-lo hover:text-text-mid">
+              <EyeOff className="h-4 w-4" /> Muted message - tap to show
+            </button>
           ) : (
             <p className="mt-0.5 whitespace-pre-wrap leading-relaxed text-text-mid">{comment.text}</p>
           )}
@@ -632,6 +695,7 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, canModify, memberNam
             onDelete={onDelete}
             onEdit={onEdit}
             onReply={onReply}
+            muting={muting}
             depth={depth + 1}
             defaultName={defaultName}
           />

@@ -40,6 +40,13 @@ export const deleteAccountData = async (uid: string) => {
     );
     await batch.commit();
   }
+  // Slice 6: this account's devices stay registered, but no longer as the account.
+  const devices = await db.collection('pushTokens').where('uid', '==', uid).get();
+  for (let i = 0; i < devices.docs.length; i += 400) {
+    const batch = db.batch();
+    devices.docs.slice(i, i + 400).forEach(d => batch.update(d.ref, { uid: null }));
+    await batch.commit();
+  }
   try {
     await adminAuth().deleteUser(uid);
   } catch (err: any) {

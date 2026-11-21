@@ -18,7 +18,7 @@ import {
 import { db } from '../firebase';
 import { authedFetch } from './authService';
 import { sortSlots } from './slotOrder';
-import { patchSyllabusSlot, type Syllabus } from './dataService';
+import { patchSyllabusSlot, withSheet, type Syllabus } from './dataService';
 
 export const MAX_SLOT_TEXT = 60;
 
@@ -88,11 +88,7 @@ export const updateSlot = (id: string, patch: Partial<Pick<Slot, 'label' | 'titl
 export const reorderSlots = (ids: string[]) =>
   authedFetch('/api/admin/slot', { method: 'POST', body: JSON.stringify({ order: ids }) }) as Promise<{ status: string; count: number }>;
 
-/** The slot as the Slots worksheet has it (the sheet wins when it has a row). */
-export const withSheet = <T extends { id: string; label: string; title: string }>(slot: T, s: Syllabus | null): T => {
-  const row = s?.slots.find(x => x.id === slot.id);
-  return row ? { ...slot, label: row.label || slot.label, title: row.title || slot.title } : slot;
-};
+export { withSheet };
 
 export const subscribeMyCheckins = (uid: string, onChange: (rows: Checkin[]) => void, onError: (e: FirestoreError) => void) =>
   onSnapshot(

@@ -23,6 +23,13 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - A signed-in verified admin account opens the calculator (logo triple-tap) without the passcode; signed out, the passcode is still asked. Signing the admin out leaves the calculator. The calculator itself is unchanged.
 - Android 1.3.1 (versionCode 13). The footer shows "Version <versionName>", read from android/app/build.gradle at build time, so the website and app show the same number.
 
+## 2026-11-21 - Slice 6 (notifications) spec approved
+
+- Phone/browser alerts plus an in-app bell. Chat posts notify every signed-in account (on by default, "Chat messages" switch to turn off), never the poster, never while they're looking at the chat.
+- Admins send notifications to Android app users only: all app users, or a dance + level group (signed-in users). Sent history kept 90 days; app users see theirs in the bell.
+- Signed-in users can mute other chat users for themselves (members by account, guests by name); admins can't be muted.
+- All 11 defaults in docs/spec.md slice 6 confirmed as written (FCM, chat-notify called by the poster's app, one replacing chat alert per device, server-registered tokens, etc.). Android ships as 1.4.0 / versionCode 15 after the slice.
+
 ## 2026-11-21 - Class cards follow the app's slots
 
 - The Classes tab shows one card per active slot in the app (Firestore `slots`), in the Reorder order, so 5 active slots = 5 cards. Patterns and notes still come from the Classes worksheet; the sheet's label/title win as on Class slots. A slot whose class has no patterns shows "Patterns TBD".

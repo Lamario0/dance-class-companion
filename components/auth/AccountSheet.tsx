@@ -19,6 +19,8 @@ const initials = (name: string, email?: string | null) =>
     .toUpperCase();
 
 /** Header button: initials when signed in, a person icon otherwise. */
+const NotifySettings = React.lazy(() => import('../notify/NotifySettings'));
+
 export const AccountButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   const { user, displayName, loading, verified } = useAccount();
   const label = user ? `Your account (${displayName || user.email})` : 'Sign in';
@@ -397,6 +399,10 @@ const SignedIn: React.FC<{
           <ShieldCheck className="h-4 w-4" /> Admin
         </p>
       )}
+
+      <React.Suspense fallback={null}>
+        <NotifySettings uid={user.uid} />
+      </React.Suspense>
 
       {error && <p role="alert" className="mt-3 rounded-[var(--radius-sm)] bg-rose-500/10 px-3 py-2 text-[15px] text-rose-200">{error}</p>}
 

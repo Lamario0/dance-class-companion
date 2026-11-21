@@ -2,7 +2,7 @@
 // Account now; admins also get an Admin section (filled in by slice 4).
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, X, NotebookPen, UserRound, ShieldCheck, Users, QrCode, CalendarCheck, ClipboardList, ScanLine, GraduationCap } from 'lucide-react';
+import { Menu, X, NotebookPen, UserRound, ShieldCheck, Users, QrCode, CalendarCheck, ClipboardList, ScanLine, GraduationCap, BellRing } from 'lucide-react';
 import { isNativeApp } from '../../services/platform';
 import { useToast } from '../ui/Toast';
 import { useAccount } from '../auth/AuthProvider';
@@ -48,13 +48,14 @@ interface SideMenuProps {
   onClassAttendance: () => void;
   /** admins only: levels and promotions (slice 5) */
   onLevels: () => void;
+  onNotifications: () => void;
   /** Android app only (slice 4): a class QR was scanned in the app */
   onScanned: (slotId: string) => void;
   /** the header button, so focus can return to it */
   returnFocusTo: React.RefObject<HTMLButtonElement>;
 }
 
-export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAccount, onStudents, onSlots, onAttendance, onClassAttendance, onLevels, onScanned, returnFocusTo }) => {
+export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAccount, onStudents, onSlots, onAttendance, onClassAttendance, onLevels, onNotifications, onScanned, returnFocusTo }) => {
   const toast = useToast();
   // Slice 4: Google's code scanner; a class code goes to its check-in.
   const scan = async () => {
@@ -230,6 +231,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ open, onClose, onNotes, onAc
               {item('Class slots', <QrCode className="h-[18px] w-[18px]" />, onSlots, 'Check-in QR codes')}
               {item('Attendance', <ClipboardList className="h-[18px] w-[18px]" />, onClassAttendance, 'Who came, add people')}
               {item('Levels', <GraduationCap className="h-[18px] w-[18px]" />, onLevels, 'Promotions, guests, targets')}
+              {item('Notifications', <BellRing className="h-[18px] w-[18px]" />, onNotifications, 'Send to app users')}
             </section>
           )}
         </nav>

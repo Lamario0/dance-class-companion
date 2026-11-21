@@ -26,6 +26,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { apiUrl } from './platform';
 
 export type ChatRole = 'member' | 'admin';
 
@@ -92,9 +93,15 @@ export interface PostAs {
   role: ChatRole;
 }
 
-export const postChatMessage = (author: string, text: string, parentId: string | null = null, as?: PostAs) => {
+/** Slice 6: ask the server to notify everyone about this new message (fire and forget). */
+const notifyChat = (id: string) => {
+  fetch(apiUrl('/api/chat-notify'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    .catch(err => console.warn('chat notify', err));
+};
+
+export const postChatMessage = async (author: string, text: string, parentId: string | null = null, as?: PostAs) => {
   const now = new Date();
-  return addDoc(collection(db, COLLECTION), {
+  const ref = await addDoc(collection(db, COLLECTION), {
     author: author.trim().slice(0, MAX_AUTHOR),
     text: text.trim().slice(0, MAX_TEXT),
     parentId,
@@ -103,6 +110,8 @@ export const postChatMessage = (author: string, text: string, parentId: string |
     expireAt: Timestamp.fromDate(nextQuarterStart(now)),
     ...(as ? { uid: as.uid, role: as.role } : {}),
   });
+  notifyChat(ref.id);
+  return ref;
 };
 
 /** Edit a message's text (own message, or any as admin). */
