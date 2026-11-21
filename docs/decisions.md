@@ -13,6 +13,11 @@ Dated log of confirmed decisions. Don't re-decide what is logged here.
 - Main bundle limit raised from 320 to 330 kB.
 - Guardrails added: ask before editing the calculator files and before `firebase deploy`.
 
+## 2026-11-20 - Calculator for admins, 1.3.1
+
+- A signed-in verified admin account opens the calculator (logo triple-tap) without the passcode; signed out, the passcode is still asked. Signing the admin out leaves the calculator. The calculator itself is unchanged.
+- Android 1.3.1 (versionCode 13). The footer shows "Version <versionName>", read from android/app/build.gradle at build time, so the website and app show the same number.
+
 ## 2026-11-19 - Slice 5 (levels) spec and build
 
 - Levels per dance: 100 / 200 / Advanced Concepts. 100->200 needs 12 classes at 100 level (after AB where the dance has one) and 4 months; 200->ADV needs 6 months and 24 200-level classes; ADV is invite only. Targets are editable on the admin Levels page.

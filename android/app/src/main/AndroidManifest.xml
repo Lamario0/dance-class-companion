@@ -47,4 +47,6 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The scanner (slice 4) locks its screen to portrait; keep portrait optional so Play doesn't restrict devices. -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
 </manifest>
